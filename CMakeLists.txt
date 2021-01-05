@@ -6,6 +6,7 @@ add_library(
 
 	renderer/platform.hpp
 	renderer/platform.cpp
+	renderer/math.hpp
 
 	thirdparty/cgltf/cgltf.h
 	thirdparty/cgltf/cgltf.c

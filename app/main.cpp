@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <platform.hpp>
+#include <math.hpp>
 
 struct App
 {
