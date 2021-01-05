@@ -1,0 +1,3 @@
+[submodule "thirdparty/tinyshader"]
+	path = thirdparty/tinyshader
+	url = git@github.com:felipeagc/tinyshader.git

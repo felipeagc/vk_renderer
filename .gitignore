@@ -1,0 +1,7 @@
+build
+*.so
+*.dll
+*.o
+*.obj
+tags
+TAGS
