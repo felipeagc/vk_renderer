@@ -208,12 +208,6 @@ union alignas(16) Mat4
     {
         return this->v[index];
     }
-
-    static Mat4 perspective(float fovy, float aspect_ratio, float znear, float zfar);
-    static Mat4 look_at(Vec3 eye, Vec3 center, Vec3 up);
-    static void translate(Mat4 *mat, Vec3 translation);
-    static void scale(Mat4 *mat, Vec3 scale);
-    static void rotate(Mat4 *mat, float angle, Vec3 axis);
 };
 
 union alignas(16) Quat
@@ -237,15 +231,6 @@ union alignas(16) Quat
         this->z = z;
         this->w = w;
     }
-
-    static Quat conjugate(Quat quat);
-    static Quat look_at(Vec3 direction, Vec3 up);
-
-    static Quat from_axis_angle(Vec3 axis, float angle);
-    static Quat from_mat4(const Mat4 &mat);
-
-    static void to_axis_angle(Quat quat, Vec3 *axis, float *angle);
-    static Mat4 to_mat4(Quat quat);
 };
 
 /////////////////////////////
@@ -255,7 +240,7 @@ union alignas(16) Quat
 /////////////////////////////
 
 MATH_INLINE
-static float mag(Vec3 vec)
+static float length(Vec3 vec)
 {
     return sqrtf((vec.x * vec.x) + (vec.y * vec.y) + (vec.z * vec.z));
 }
@@ -343,7 +328,7 @@ static Vec3 operator/(Vec3 left, float right)
 MATH_INLINE
 static float distance(Vec3 left, Vec3 right)
 {
-    return mag(left - right);
+    return length(left - right);
 }
 
 MATH_INLINE
@@ -366,7 +351,7 @@ MATH_INLINE
 static Vec3 normalize(Vec3 vec)
 {
     Vec3 result = vec;
-    float norm = mag(vec);
+    float norm = length(vec);
     if (norm != 0.0f) {
         result = vec * (1.0f / norm);
     }
@@ -536,7 +521,6 @@ static Mat4 operator*(const Mat4 &left, const Mat4 &right)
     return result;
 }
 
-MATH_INLINE
 static Vec4 operator*(const Mat4 &left, const Vec4 &right)
 {
     Vec4 result;
@@ -565,9 +549,7 @@ static Vec4 operator*(const Mat4 &left, const Vec4 &right)
     return result;
 }
 
-
-MATH_INLINE
-static Mat4 transpose(const Mat4 &mat)
+static Mat4 Mat4Transpose(const Mat4 &mat)
 {
     Mat4 result = mat;
     result.cols[0][1] = mat.cols[1][0];
@@ -588,8 +570,7 @@ static Mat4 transpose(const Mat4 &mat)
     return result;
 }
 
-MATH_INLINE
-static Mat4 inverse(const Mat4 &mat)
+static Mat4 Mat4Inverse(const Mat4 &mat)
 {
     Mat4 inv = {};
 
@@ -650,8 +631,7 @@ static Mat4 inverse(const Mat4 &mat)
     return inv;
 }
 
-MATH_INLINE
-Mat4 Mat4::perspective(float fovy, float aspect_ratio, float znear, float zfar)
+static Mat4 Mat4Perspective(float fovy, float aspect_ratio, float znear, float zfar)
 {
     Mat4 result = {};
 
@@ -666,8 +646,21 @@ Mat4 Mat4::perspective(float fovy, float aspect_ratio, float znear, float zfar)
     return result;
 }
 
-MATH_INLINE
-Mat4 Mat4::look_at(Vec3 eye, Vec3 center, Vec3 up)
+static Mat4 Mat4PerspectiveReverseZ(float fovy, float aspect_ratio, float znear)
+{
+    Mat4 result = {};
+
+    float tan_half_fovy = tanf(fovy / 2.0f);
+
+    result.cols[0][0] = 1.0f / (aspect_ratio * tan_half_fovy);
+    result.cols[1][1] = 1.0f / tan_half_fovy;
+    result.cols[2][3] = -1.0f;
+    result.cols[3][2] = znear;
+
+    return result;
+}
+
+static Mat4 Mat4LookAt(Vec3 eye, Vec3 center, Vec3 up)
 {
     Vec3 f = normalize(center - eye);
     Vec3 s = normalize(f - up);
@@ -695,7 +688,7 @@ Mat4 Mat4::look_at(Vec3 eye, Vec3 center, Vec3 up)
 }
 
 MATH_INLINE
-void Mat4::translate(Mat4 *mat, Vec3 translation)
+static void Mat4Translate(Mat4 *mat, Vec3 translation)
 {
     mat->cols[3][0] += translation.x;
     mat->cols[3][1] += translation.y;
@@ -703,15 +696,14 @@ void Mat4::translate(Mat4 *mat, Vec3 translation)
 }
 
 MATH_INLINE
-void Mat4::scale(Mat4 *mat, Vec3 scale)
+static void Mat4Scale(Mat4 *mat, Vec3 scale)
 {
     mat->cols[0][0] *= scale.x;
     mat->cols[1][1] *= scale.y;
     mat->cols[2][2] *= scale.z;
 }
 
-MATH_INLINE
-void Mat4::rotate(Mat4 *mat, float angle, Vec3 axis)
+static void Mat4Rotate(Mat4 *mat, float angle, Vec3 axis)
 {
     float c = cosf(angle);
     float s = sinf(angle);
@@ -733,9 +725,18 @@ void Mat4::rotate(Mat4 *mat, float angle, Vec3 axis)
     rotate.cols[2][2] = c + temp.z * axis.z;
 
     Mat4 result;
-    result.v[0] = (mat->v[0] * rotate.cols[0][0]) + (mat->v[1] * rotate.cols[0][1]) + (mat->v[2] * rotate.cols[0][2]);
-    result.v[1] = (mat->v[0] * rotate.cols[1][0]) + (mat->v[1] * rotate.cols[1][1]) + (mat->v[2] * rotate.cols[1][2]);
-    result.v[2] = (mat->v[0] * rotate.cols[2][0]) + (mat->v[1] * rotate.cols[2][1]) + (mat->v[2] * rotate.cols[2][2]);
+    result.v[0] =
+        (mat->v[0] * rotate.cols[0][0]) +
+        (mat->v[1] * rotate.cols[0][1]) +
+        (mat->v[2] * rotate.cols[0][2]);
+    result.v[1] =
+        (mat->v[0] * rotate.cols[1][0]) +
+        (mat->v[1] * rotate.cols[1][1]) +
+        (mat->v[2] * rotate.cols[1][2]);
+    result.v[2] =
+        (mat->v[0] * rotate.cols[2][0]) +
+        (mat->v[1] * rotate.cols[2][1]) +
+        (mat->v[2] * rotate.cols[2][2]);
     result.v[3] = mat->v[3];
 
     *mat = result;
@@ -778,7 +779,7 @@ static Quat normalize(Quat left)
 }
 
 MATH_INLINE
-Quat Quat::conjugate(Quat quat)
+static Quat QuatConjugate(Quat quat)
 {
     Quat result;
     result.w = quat.w;
@@ -789,7 +790,7 @@ Quat Quat::conjugate(Quat quat)
 }
 
 MATH_INLINE
-Quat Quat::look_at(Vec3 direction, Vec3 up)
+static Quat QuatLookAt(Vec3 direction, Vec3 up)
 {
     float m[3][3] = {
         {0, 0, 0},
@@ -871,7 +872,7 @@ Quat Quat::look_at(Vec3 direction, Vec3 up)
 }
 
 MATH_INLINE
-Quat Quat::from_axis_angle(Vec3 axis, float angle)
+static Quat QuatFromAxisAngle(Vec3 axis, float angle)
 {
     float s = sinf(angle / 2.0f);
     Quat result;
@@ -883,7 +884,7 @@ Quat Quat::from_axis_angle(Vec3 axis, float angle)
 }
 
 MATH_INLINE
-Quat Quat::from_mat4(const Mat4 &mat)
+static Quat QuatFromMat4(const Mat4 &mat)
 {
     Quat result;
     float trace = mat.cols[0][0] + mat.cols[1][1] + mat.cols[2][2];
@@ -920,7 +921,7 @@ Quat Quat::from_mat4(const Mat4 &mat)
 }
 
 MATH_INLINE
-void Quat::to_axis_angle(Quat quat, Vec3 *axis, float *angle)
+static void QuatToAxisAngle(Quat quat, Vec3 *axis, float *angle)
 {
     quat = normalize(quat);
     *angle = 2.0f * acosf(quat.w);
@@ -937,7 +938,7 @@ void Quat::to_axis_angle(Quat quat, Vec3 *axis, float *angle)
 }
 
 MATH_INLINE
-Mat4 Quat::to_mat4(Quat quat)
+static Mat4 QuatToMat4(Quat quat)
 {
     Mat4 result(1.0f);
 

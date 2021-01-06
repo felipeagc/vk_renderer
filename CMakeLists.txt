@@ -7,6 +7,8 @@ add_library(
 	renderer/platform.hpp
 	renderer/platform.cpp
 	renderer/math.hpp
+	renderer/camera.hpp
+	renderer/camera.cpp
 
 	thirdparty/cgltf/cgltf.h
 	thirdparty/cgltf/cgltf.c

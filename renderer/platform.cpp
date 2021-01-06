@@ -76,22 +76,20 @@ static const char *getExeDirPath()
 #endif
 }
 
-struct PlatformImpl
+struct Platform
 {
     GLFWwindow *window;
     RgDevice *device;
     RgSwapchain *swapchain;
     const char *exe_dir;
-
-    void resizeResources();
 };
 
-void PlatformImpl::resizeResources()
+void PlatformResizeResources(Platform *platform)
 {
     int width, height;
-    glfwGetFramebufferSize(this->window, &width, &height);
+    glfwGetFramebufferSize(platform->window, &width, &height);
 
-    RgSwapchain *old_swapchain = this->swapchain;
+    RgSwapchain *old_swapchain = platform->swapchain;
 
     RgSwapchainInfo swapchain_info = {};
     swapchain_info.vsync = true;
@@ -101,26 +99,24 @@ void PlatformImpl::resizeResources()
     swapchain_info.height = height;
 
 #ifdef _WIN32
-    swapchain_info.window_handle = (void*)glfwGetWin32Window(this->window),
+    swapchain_info.window_handle = (void*)glfwGetWin32Window(platform->window),
 #else
-    swapchain_info.window_handle = (void*)glfwGetX11Window(this->window),
+    swapchain_info.window_handle = (void*)glfwGetX11Window(platform->window),
     swapchain_info.display_handle = (void*)glfwGetX11Display(),
 #endif
 
-    this->swapchain = rgSwapchainCreate(this->device, &swapchain_info);
+    platform->swapchain = rgSwapchainCreate(platform->device, &swapchain_info);
 
     if (old_swapchain)
     {
-        rgSwapchainDestroy(this->device, old_swapchain);
+        rgSwapchainDestroy(platform->device, old_swapchain);
     }
 }
 
-Platform *Platform::create(const char *window_title)
+Platform *PlatformCreate(const char *window_title)
 {
     Platform *platform = new Platform();
-    platform->impl = new PlatformImpl();
-
-    platform->impl->exe_dir = getExeDirPath();
+    platform->exe_dir = getExeDirPath();
 
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -146,66 +142,112 @@ Platform *Platform::create(const char *window_title)
     glfwSetWindowMaximizeCallback(window, eventQueueWindowMaximizeCallback);
     glfwSetWindowContentScaleCallback(window, eventQueueWindowContentScaleCallback);
 
-    platform->impl->window = window;
+    platform->window = window;
 
     RgDeviceInfo device_info = {};
     device_info.enable_validation = true;
-    platform->impl->device = rgDeviceCreate(&device_info);
+    platform->device = rgDeviceCreate(&device_info);
 
-    platform->impl->resizeResources();
+    PlatformResizeResources(platform);
 
     return platform;
 }
 
-void Platform::destroy()
+void PlatformDestroy(Platform *platform)
 {
-    rgSwapchainDestroy(this->impl->device, this->impl->swapchain);
-    rgDeviceDestroy(this->impl->device);
+    rgSwapchainDestroy(platform->device, platform->swapchain);
+    rgDeviceDestroy(platform->device);
 
-    glfwDestroyWindow(this->impl->window);
+    glfwDestroyWindow(platform->window);
     glfwTerminate();
 
-    delete[] this->impl->exe_dir;
+    delete[] platform->exe_dir;
 
-    delete this->impl;
-    delete this;
+    delete platform;
 }
 
-const char *Platform::getExeDir()
+const char *PlatformGetExeDir(Platform *platform)
 {
-    return this->impl->exe_dir;
+    return platform->exe_dir;
 }
 
-void Platform::getWindowSize(uint32_t *width, uint32_t *height)
+RgDevice *PlatformGetDevice(Platform *platform)
+{
+    return platform->device;
+}
+
+RgSwapchain *PlatformGetSwapchain(Platform *platform)
+{
+    return platform->swapchain;
+}
+
+double PlatformGetTime(Platform *platform)
+{
+    return glfwGetTime();
+}
+
+void PlatformGetWindowSize(Platform *platform, uint32_t *width, uint32_t *height)
 {
     int iwidth, iheight;
-    glfwGetFramebufferSize(this->impl->window, &iwidth, &iheight);
+    glfwGetFramebufferSize(platform->window, &iwidth, &iheight);
     *width = (uint32_t)iwidth;
     *height = (uint32_t)iheight;
 }
 
-RgDevice *Platform::getDevice()
+bool PlatformGetCursorEnabled(Platform *platform)
 {
-    return this->impl->device;
+    return glfwGetInputMode(platform->window, GLFW_CURSOR) == GLFW_CURSOR_NORMAL;
 }
 
-RgSwapchain *Platform::getSwapchain()
+void PlatformSetCursorEnabled(Platform *platform, bool enabled)
 {
-    return this->impl->swapchain;
+    int mode = enabled ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED;
+    glfwSetInputMode(platform->window, GLFW_CURSOR, mode);
 }
 
-
-bool Platform::shouldClose()
+void PlatformGetCursorPos(Platform *platform, int32_t *x, int32_t *y)
 {
-    return glfwWindowShouldClose(this->impl->window);
+    double dx, dy;
+    glfwGetCursorPos(platform->window, &dx, &dy);
+    *x = (int32_t)dx;
+    *y = (int32_t)dy;
 }
 
-void Platform::pollEvents()
+bool PlatformGetKeyState(Platform *platform, Key key)
+{
+    int state = glfwGetKey(platform->window, key);
+    switch (state)
+    {
+    case GLFW_PRESS:
+    case GLFW_REPEAT: return true;
+    default: return false;
+    }
+    return false;
+}
+
+bool PlatformGetButtonState(Platform *platform, Button button)
+{
+    int state = glfwGetMouseButton(platform->window, button);
+    switch (state)
+    {
+    case GLFW_PRESS:
+    case GLFW_REPEAT: return true;
+    default: return false;
+    }
+    return false;
+}
+
+bool PlatformShouldClose(Platform *platform)
+{
+    return glfwWindowShouldClose(platform->window);
+}
+
+void PlatformPollEvents(Platform *platform)
 {
     glfwPollEvents();
 }
 
-bool Platform::nextEvent(Event *event)
+bool PlatformNextEvent(Platform *platform, Event *event)
 {
     memset(event, 0, sizeof(Event));
 
@@ -217,17 +259,17 @@ bool Platform::nextEvent(Event *event)
 
     if (event->type == EVENT_WINDOW_RESIZED)
     {
-        this->impl->resizeResources();
+        PlatformResizeResources(platform);
     }
 
     return event->type != EVENT_NONE;
 }
 
-uint8_t *Platform::loadFileRelative(const char *relative_path, size_t *size)
+uint8_t *PlatformLoadFileRelative(Platform *platform, const char *relative_path, size_t *size)
 {
-    size_t path_size = strlen(this->impl->exe_dir) + 1 + strlen(relative_path) + 1;
+    size_t path_size = strlen(platform->exe_dir) + 1 + strlen(relative_path) + 1;
     char *path = new char[path_size];
-    snprintf(path, path_size, "%s/%s", this->impl->exe_dir, relative_path);
+    snprintf(path, path_size, "%s/%s", platform->exe_dir, relative_path);
     path[path_size-1] = '\0';
 
     FILE *f = fopen(path, "rb");
@@ -247,7 +289,7 @@ uint8_t *Platform::loadFileRelative(const char *relative_path, size_t *size)
     return data;
 }
 
-RgPipeline *Platform::createPipeline(const char *hlsl, size_t hlsl_size)
+RgPipeline *PlatformCreatePipeline(Platform *platform, const char *hlsl, size_t hlsl_size)
 {
     uint8_t *vertex_code = NULL;
     size_t vertex_code_size = 0;
@@ -449,7 +491,7 @@ RgPipeline *Platform::createPipeline(const char *hlsl, size_t hlsl_size)
     }
 
     RgPipeline *pipeline = rgExtGraphicsPipelineCreateInferredBindings(
-                this->impl->device,
+                platform->device,
                 true,
                 &pipeline_info);
 
