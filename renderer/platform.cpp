@@ -289,6 +289,75 @@ uint8_t *PlatformLoadFileRelative(Platform *platform, const char *relative_path,
     return data;
 }
 
+static bool isWhitespace(char c)
+{
+    return c == ' ' || c == '\t';
+}
+
+static bool isWhitespaceOrNewLine(char c)
+{
+    return c == ' ' || c == '\r' || c == '\n' || c == '\t';
+}
+
+static bool stringToBool(const char *str, size_t len, bool *value) 
+{
+        if (strncmp(str, "true", len) == 0) *value = true;
+        else if (strncmp(str, "false", len) == 0) *value = false;
+        else return false;
+        return true;
+}
+
+static bool stringToTopology(const char *str, size_t len, RgPrimitiveTopology *value)
+{
+    if (strncmp(str, "triangle_list", len) == 0) *value = RG_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    else if (strncmp(str, "line_list", len) == 0) *value = RG_PRIMITIVE_TOPOLOGY_LINE_LIST;
+    else return false;
+    return true;
+}
+
+static bool stringToFrontFace(const char *str, size_t len, RgFrontFace *value)
+{
+    if (strncmp(str, "counter_clockwise", len) == 0) *value = RG_FRONT_FACE_COUNTER_CLOCKWISE;
+    else if (strncmp(str, "clockwise", len) == 0) *value = RG_FRONT_FACE_CLOCKWISE;
+    else return false;
+    return true;
+}
+
+static bool stringToCullMode(const char *str, size_t len, RgCullMode * value)
+{
+    if (strncmp(str, "none", len) == 0) *value =  RG_CULL_MODE_NONE;
+    else if (strncmp(str, "front", len) == 0) *value =  RG_CULL_MODE_FRONT;
+    else if (strncmp(str, "back", len) == 0) *value =  RG_CULL_MODE_BACK;
+    else if (strncmp(str, "front_and_back", len) == 0) *value = RG_CULL_MODE_FRONT_AND_BACK;
+    else return false;
+    return true;
+}
+
+static bool stringToPolygonMode(const char *str, size_t len, RgPolygonMode *value) 
+{
+    if (strncmp(str, "fill", len) == 0) *value = RG_POLYGON_MODE_FILL;
+    else if (strncmp(str, "line", len) == 0) *value = RG_POLYGON_MODE_LINE;
+    else if (strncmp(str, "point", len) == 0) *value = RG_POLYGON_MODE_POINT;
+    else return false;
+    return true;
+}
+
+static bool stringToCompareOp(const char *str, size_t len, RgCompareOp *value)
+{
+    if (strncmp(str, "never", len) == 0) *value = RG_COMPARE_OP_NEVER;
+    if (strncmp(str, "less", len) == 0) *value = RG_COMPARE_OP_LESS;
+    if (strncmp(str, "equal", len) == 0) *value = RG_COMPARE_OP_EQUAL;
+    if (strncmp(str, "less_or_equal", len) == 0) *value = RG_COMPARE_OP_LESS_OR_EQUAL;
+    if (strncmp(str, "greater", len) == 0) *value = RG_COMPARE_OP_GREATER;
+    if (strncmp(str, "not_equal", len) == 0) *value = RG_COMPARE_OP_NOT_EQUAL;
+    if (strncmp(str, "greater_or_equal", len) == 0)
+        *value = RG_COMPARE_OP_GREATER_OR_EQUAL;
+    if (strncmp(str, "always", len) == 0)
+        *value = RG_COMPARE_OP_ALWAYS;
+    else return false;
+    return true;
+}
+
 RgPipeline *PlatformCreatePipeline(Platform *platform, const char *hlsl, size_t hlsl_size)
 {
     uint8_t *vertex_code = NULL;
@@ -361,6 +430,12 @@ RgPipeline *PlatformCreatePipeline(Platform *platform, const char *hlsl, size_t 
         .front_face = RG_FRONT_FACE_CLOCKWISE,
         .topology = RG_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         .blend = { .enable = false },
+        .depth_stencil = {
+            .test_enable = true,
+            .write_enable = true,
+            .bias_enable = false,
+            .compare_op = RG_COMPARE_OP_GREATER_OR_EQUAL,
+        },
 
         .vertex = vertex_code,
         .vertex_size = vertex_code_size,
@@ -373,52 +448,6 @@ RgPipeline *PlatformCreatePipeline(Platform *platform, const char *hlsl, size_t 
 
     const char *pragma = "#pragma";
     size_t pragma_len = strlen(pragma);
-
-    auto isWhitespace = [](char c) {
-        return c == ' ' || c == '\t';
-    };
-
-    auto isWhitespaceOrNewLine = [](char c) {
-        return c == ' ' || c == '\r' || c == '\n' || c == '\t';
-    };
-
-    auto stringToBool = [](const char *str, size_t len, bool *value) -> bool {
-        if (strncmp(str, "true", len) == 0) *value = true;
-        else if (strncmp(str, "false", len) == 0) *value = false;
-        else return false;
-        return true;
-    };
-
-    auto stringToTopology = [](const char *str, size_t len, RgPrimitiveTopology *value) -> bool {
-        if (strncmp(str, "triangle_list", len) == 0) *value = RG_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-        else if (strncmp(str, "line_list", len) == 0) *value = RG_PRIMITIVE_TOPOLOGY_LINE_LIST;
-        else return false;
-        return true;
-    };
-
-    auto stringToFrontFace = [](const char *str, size_t len, RgFrontFace *value) -> bool {
-        if (strncmp(str, "counter_clockwise", len) == 0) *value = RG_FRONT_FACE_COUNTER_CLOCKWISE;
-        else if (strncmp(str, "clockwise", len) == 0) *value = RG_FRONT_FACE_CLOCKWISE;
-        else return false;
-        return true;
-    };
-
-    auto stringToCullMode = [](const char *str, size_t len, RgCullMode * value) -> bool {
-        if (strncmp(str, "none", len) == 0) *value =  RG_CULL_MODE_NONE;
-        else if (strncmp(str, "front", len) == 0) *value =  RG_CULL_MODE_FRONT;
-        else if (strncmp(str, "back", len) == 0) *value =  RG_CULL_MODE_BACK;
-        else if (strncmp(str, "front_and_back", len) == 0) *value = RG_CULL_MODE_FRONT_AND_BACK;
-        else return false;
-        return true;
-    };
-
-    auto stringToPolygonMode = [](const char *str, size_t len, RgPolygonMode *value) -> bool {
-        if (strncmp(str, "fill", len) == 0) *value = RG_POLYGON_MODE_FILL;
-        else if (strncmp(str, "line", len) == 0) *value = RG_POLYGON_MODE_LINE;
-        else if (strncmp(str, "point", len) == 0) *value = RG_POLYGON_MODE_POINT;
-        else return false;
-        return true;
-    };
 
     for (size_t i = 0; i < hlsl_size; ++i)
     {
@@ -451,15 +480,23 @@ RgPipeline *PlatformCreatePipeline(Platform *platform, const char *hlsl, size_t 
             }
             else if (strncmp(key, "depth_test", key_len) == 0)
             {
-                 success = stringToBool(value, value_len, &pipeline_info.depth_stencil.test_enable);
+                 success = stringToBool(
+                         value, value_len, &pipeline_info.depth_stencil.test_enable);
             }
             else if (strncmp(key, "depth_write", key_len) == 0)
             {
-                 success = stringToBool(value, value_len, &pipeline_info.depth_stencil.write_enable);
+                 success = stringToBool(
+                         value, value_len, &pipeline_info.depth_stencil.write_enable);
             }
             else if (strncmp(key, "depth_bias", key_len) == 0)
             {
-                success = stringToBool(value, value_len, &pipeline_info.depth_stencil.bias_enable);
+                success = stringToBool(
+                        value, value_len, &pipeline_info.depth_stencil.bias_enable);
+            }
+            else if (strncmp(key, "depth_compare_op", key_len) == 0)
+            {
+                success = stringToCompareOp(
+                        value, value_len, &pipeline_info.depth_stencil.compare_op);
             }
             else if (strncmp(key, "topology", key_len) == 0)
             {

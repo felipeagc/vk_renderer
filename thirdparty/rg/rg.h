@@ -309,11 +309,24 @@ typedef struct RgPipelineBlendState
     bool enable;
 } RgPipelineBlendState;
 
+typedef enum RgCompareOp
+{
+    RG_COMPARE_OP_NEVER = 0,
+    RG_COMPARE_OP_LESS = 1,
+    RG_COMPARE_OP_EQUAL = 2,
+    RG_COMPARE_OP_LESS_OR_EQUAL = 3,
+    RG_COMPARE_OP_GREATER = 4,
+    RG_COMPARE_OP_NOT_EQUAL = 5,
+    RG_COMPARE_OP_GREATER_OR_EQUAL = 6,
+    RG_COMPARE_OP_ALWAYS = 7,
+} RgCompareOp;
+
 typedef struct RgPipelineDepthStencilState
 {
     bool test_enable;
     bool write_enable;
     bool bias_enable;
+    RgCompareOp compare_op;
 } RgPipelineDepthStencilState;
 
 typedef struct RgGraphicsPipelineInfo

@@ -751,6 +751,22 @@ static VkImageAspectFlags rgImageAspectToVk(RgImageAspect aspect)
     }
     return vk_aspect;
 }
+
+static VkCompareOp rgCompareOpToVk(RgCompareOp compare_op)
+{
+    switch (compare_op)
+    {
+    case RG_COMPARE_OP_NEVER: return VK_COMPARE_OP_NEVER;
+    case RG_COMPARE_OP_LESS: return VK_COMPARE_OP_LESS;
+    case RG_COMPARE_OP_EQUAL: return VK_COMPARE_OP_EQUAL;
+    case RG_COMPARE_OP_LESS_OR_EQUAL: return VK_COMPARE_OP_LESS_OR_EQUAL;
+    case RG_COMPARE_OP_GREATER: return VK_COMPARE_OP_GREATER;
+    case RG_COMPARE_OP_NOT_EQUAL: return VK_COMPARE_OP_NOT_EQUAL;
+    case RG_COMPARE_OP_GREATER_OR_EQUAL: return VK_COMPARE_OP_GREATER_OR_EQUAL;
+    case RG_COMPARE_OP_ALWAYS: return VK_COMPARE_OP_ALWAYS;
+    }
+    return VK_COMPARE_OP_NEVER;
+}
 // }}}
 
 // Device memory allocator {{{
@@ -4012,7 +4028,8 @@ static VkPipeline rgGraphicsPipelineGetInstance(
     depth_stencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
     depth_stencil.depthTestEnable = pipeline->graphics.depth_stencil.test_enable;
     depth_stencil.depthWriteEnable = pipeline->graphics.depth_stencil.write_enable;
-    depth_stencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+    depth_stencil.depthCompareOp =
+        rgCompareOpToVk(pipeline->graphics.depth_stencil.compare_op);
 
     VkPipelineColorBlendAttachmentState color_blend_attachment_enabled = {0};
     color_blend_attachment_enabled.blendEnable = VK_TRUE;

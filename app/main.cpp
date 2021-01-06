@@ -190,7 +190,7 @@ void AppRenderFrame(App *app)
 
     RgClearValue offscreen_clear_values[] = {
         {.color = { { 0.0, 0.0, 0.0, 1.0 } } },
-        {.depth_stencil = { 1.0f, 0 } },
+        {.depth_stencil = { 0.0f, 0 } },
     };
     rgCmdSetRenderPass(cmd_buffer, offscreen_pass, 2, offscreen_clear_values);
 
