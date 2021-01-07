@@ -644,13 +644,13 @@ Mat4 Mat4Inverse(const Mat4 &mat)
 static inline
 Mat4 Mat4Perspective(float fovy, float aspect, float n, float f)
 {
-    float c = 1.0 / tanf(fovy / 2.0);
+    float c = 1.0f / tanf(fovy / 2.0f);
 
     Mat4 result = {};
-    result.v[0] = V4(c/aspect, 0,  0,                 0);
-    result.v[1] = V4(0,        c,  0,                 0);
-    result.v[2] = V4(0,        0, -(f+n)/(f-n),      -1);
-    result.v[3] = V4(0,        0, -(2.0*f*n)/(f-n),   0);
+    result.v[0] = V4(c/aspect, 0.0f,  0.0f,              0.0f);
+    result.v[1] = V4(0.0f,     c,     0.0f,              0.0f);
+    result.v[2] = V4(0.0f,     0.0f, -(f+n)/(f-n),      -1.0f);
+    result.v[3] = V4(0.0f,     0.0f, -(2.0f*f*n)/(f-n),  0.0f);
     return result;
 }
 
@@ -663,10 +663,10 @@ Mat4 Mat4PerspectiveReverseZ(float fovy, float aspect_ratio, float z_near)
     float sy = 1.0f / t;
     float sx = sy / aspect_ratio;
 
-    result.v[0] = V4(sx,    0.0f,  0.0f, 0.0f);
-    result.v[1] = V4(0.0f, -sy,    0.0f, 0.0f);
-    result.v[2] = V4(0.0f,  0.0f,  0.0f, z_near);
-    result.v[3] = V4(0.0f,  0.0f, -1.0f, 0.0f);
+    result.v[0] = V4(sx,    0.0f,  0.0f,   0.0f);
+    result.v[1] = V4(0.0f,  sy,    0.0f,   0.0f);
+    result.v[2] = V4(0.0f,  0.0f,  0.0f,  -1.0f);
+    result.v[3] = V4(0.0f,  0.0f,  z_near, 0.0f);
 
     return result;
 }

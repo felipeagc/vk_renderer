@@ -63,7 +63,7 @@ CameraUniform FPSCameraUpdate(FPSCamera *camera, float delta_time)
     PlatformGetWindowSize(camera->platform, &width, &height);
 
     float aspect_ratio = (float)width / (float)height;
-    Mat4 proj = Mat4Perspective(camera->fovy, aspect_ratio, 0.1f, 100.0f);
+    Mat4 proj = Mat4PerspectiveReverseZ(camera->fovy, aspect_ratio, 0.1f);
     Mat4 view = Mat4LookAt(camera->pos, camera->pos + front, up);
 
     CameraUniform uniform = {};

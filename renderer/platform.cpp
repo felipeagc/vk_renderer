@@ -432,7 +432,7 @@ RgPipeline *PlatformCreatePipeline(Platform *platform, const char *hlsl, size_t 
     pipeline_info.depth_stencil.test_enable = true;
     pipeline_info.depth_stencil.write_enable = true;
     pipeline_info.depth_stencil.bias_enable = false;
-    pipeline_info.depth_stencil.compare_op = RG_COMPARE_OP_LESS;
+    pipeline_info.depth_stencil.compare_op = RG_COMPARE_OP_GREATER;
 
     pipeline_info.vertex = vertex_code;
     pipeline_info.vertex_size = vertex_code_size;
