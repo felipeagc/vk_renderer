@@ -1,9 +1,84 @@
 #include <stdio.h>
 #include <assert.h>
-#include <platform.hpp>
-#include <camera.hpp>
-#include <math.hpp>
-#include <camera.hpp>
+#include <renderer/platform.h>
+#include <renderer/camera.h>
+#include <renderer/math.h>
+#include <renderer/mesh.h>
+#include <renderer/allocator.h>
+
+struct UniformBuffer
+{
+    Platform *platform;
+    Allocator *allocator;
+    RgBuffer *buffer;
+    uint8_t *mapping;
+    size_t size;
+    size_t offset;
+    size_t alignment;
+};
+
+static inline size_t alignTo(size_t n, size_t to)
+{
+    size_t rest = n % to;
+    return (rest != 0) ? (n + to - rest) : n;
+}
+
+UniformBuffer *UniformBufferCreate(Platform *platform, Allocator *allocator)
+{
+    UniformBuffer *uniform_buffer =
+        (UniformBuffer*)Allocate(allocator, sizeof(UniformBuffer));
+    *uniform_buffer = {};
+
+    uniform_buffer->platform = platform;
+    uniform_buffer->allocator = allocator;
+
+    RgDevice *device = PlatformGetDevice(uniform_buffer->platform);
+    RgLimits limits;
+    rgDeviceGetLimits(device, &limits);
+
+    uniform_buffer->size = 65536;
+    uniform_buffer->alignment = limits.min_uniform_buffer_offset_alignment;
+
+    RgBufferInfo buffer_info = {};
+    buffer_info.size = uniform_buffer->size;
+    buffer_info.usage = RG_BUFFER_USAGE_UNIFORM | RG_BUFFER_USAGE_TRANSFER_DST;
+    buffer_info.memory = RG_BUFFER_MEMORY_HOST;
+    uniform_buffer->buffer = rgBufferCreate(device, &buffer_info);
+
+    uniform_buffer->mapping = (uint8_t*)rgBufferMap(device, uniform_buffer->buffer);
+
+    return uniform_buffer;
+}
+
+void UniformBufferReset(UniformBuffer *uniform_buffer)
+{
+    uniform_buffer->offset = 0;
+}
+
+uint32_t UniformBufferUse(UniformBuffer *uniform_buffer, void *data, size_t size)
+{
+    uniform_buffer->offset = alignTo(uniform_buffer->offset, uniform_buffer->alignment);
+    size_t old_offset = uniform_buffer->offset;
+    uniform_buffer->offset += size;
+    assert(uniform_buffer->offset <= uniform_buffer->size);
+    memcpy(uniform_buffer->mapping + old_offset, data, size);
+    return (uint32_t)old_offset;
+}
+
+void UniformBufferGetDescriptor(UniformBuffer *uniform_buffer, RgDescriptor *descriptor)
+{
+    descriptor->buffer.buffer = uniform_buffer->buffer;
+    descriptor->buffer.offset = 0;
+    descriptor->buffer.range = 0;
+}
+
+void UniformBufferDestroy(UniformBuffer *uniform_buffer)
+{
+    RgDevice *device = PlatformGetDevice(uniform_buffer->platform);
+    rgBufferUnmap(device, uniform_buffer->buffer);
+    rgBufferDestroy(device, uniform_buffer->buffer);
+    Free(uniform_buffer->allocator, uniform_buffer);
+}
 
 struct App
 {
@@ -16,14 +91,21 @@ struct App
     RgCmdBuffer *cmd_buffers[2];
     uint32_t current_frame;
 
+    double last_time;
+    double delta_time;
+
     RgSampler *sampler;
 
     RgPipeline *offscreen_pipeline;
     RgPipeline *backbuffer_pipeline;
 
+    RgDescriptorSet *camera_set;
+
     RgDescriptorSet *descriptor_set;
 
+    UniformBuffer *uniform_buffer;
     FPSCamera camera;
+    Mesh *cube_mesh;
 };
 
 App *AppCreate();
@@ -81,6 +163,8 @@ App *AppCreate()
 
     app->descriptor_set = rgPipelineCreateDescriptorSet(app->backbuffer_pipeline, 0);
 
+    app->camera_set = rgPipelineCreateDescriptorSet(app->offscreen_pipeline, 0);
+
     app->cmd_pool = rgCmdPoolCreate(device, RG_QUEUE_TYPE_GRAPHICS);
     app->cmd_buffers[0] = rgCmdBufferCreate(device, app->cmd_pool);
     app->cmd_buffers[1] = rgCmdBufferCreate(device, app->cmd_pool);
@@ -88,6 +172,15 @@ App *AppCreate()
     AppResize(app);
 
     FPSCameraInit(&app->camera, app->platform);
+    
+    app->uniform_buffer = UniformBufferCreate(app->platform, NULL);
+    RgDescriptor uniform_descriptor;
+    UniformBufferGetDescriptor(app->uniform_buffer, &uniform_descriptor);
+    rgUpdateDescriptorSet(app->camera_set, 1, &uniform_descriptor);
+
+    app->cube_mesh = MeshCreateCube(app->platform, app->cmd_pool, NULL);
+
+    app->last_time = PlatformGetTime(app->platform);
 
     return app;
 }
@@ -96,7 +189,11 @@ void AppDestroy(App *app)
 {
     RgDevice *device = PlatformGetDevice(app->platform);
 
+    UniformBufferDestroy(app->uniform_buffer);
+    MeshDestroy(app->cube_mesh);
+
     rgPipelineDestroyDescriptorSet(app->backbuffer_pipeline, app->descriptor_set);
+    rgPipelineDestroyDescriptorSet(app->offscreen_pipeline, app->camera_set);
 
     rgPipelineDestroy(device, app->offscreen_pipeline);
     rgPipelineDestroy(device, app->backbuffer_pipeline);
@@ -174,9 +271,10 @@ void AppResize(App *app)
     rgUpdateDescriptorSet(app->descriptor_set, 2, descriptors);
 }
 
-
 void AppRenderFrame(App *app)
 {
+    CameraUniform camera_uniform = FPSCameraUpdate(&app->camera, app->delta_time);
+
     RgSwapchain *swapchain = PlatformGetSwapchain(app->platform);
     RgCmdBuffer *cmd_buffer = app->cmd_buffers[app->current_frame];
     RgRenderPass *offscreen_pass = app->offscreen_pass;
@@ -188,21 +286,27 @@ void AppRenderFrame(App *app)
 
     // Offscreen pass
 
-    RgClearValue offscreen_clear_values[] = {
-        {.color = { { 0.0, 0.0, 0.0, 1.0 } } },
-        {.depth_stencil = { 0.0f, 0 } },
-    };
+    RgClearValue offscreen_clear_values[2];
+    offscreen_clear_values[0].color = { { 0.0, 0.0, 0.0, 1.0 } };
+    offscreen_clear_values[1].depth_stencil = { 1.0f, 0 };
     rgCmdSetRenderPass(cmd_buffer, offscreen_pass, 2, offscreen_clear_values);
 
     rgCmdBindPipeline(cmd_buffer, app->offscreen_pipeline);
+    uint32_t uniform_offset =
+        UniformBufferUse(app->uniform_buffer, &camera_uniform, sizeof(camera_uniform));
+    rgCmdBindDescriptorSet(cmd_buffer, app->camera_set, 1, &uniform_offset);
 
-    rgCmdDraw(cmd_buffer, 3, 1, 0, 0);
+    rgCmdBindVertexBuffer(
+            cmd_buffer, MeshGetVertexBuffer(app->cube_mesh), 0);
+    rgCmdBindIndexBuffer(
+            cmd_buffer, MeshGetIndexBuffer(app->cube_mesh), 0, RG_INDEX_TYPE_UINT32);
+
+    rgCmdDrawIndexed(cmd_buffer, MeshGetIndexCount(app->cube_mesh), 1, 0, 0, 0);
 
     // Backbuffer pass
 
-    RgClearValue backbuffer_clear_values[] = {
-        {.color = { { 0.0, 0.0, 0.0, 1.0 } } },
-    };
+    RgClearValue backbuffer_clear_values[1];
+    backbuffer_clear_values[0].color = { { 0.0, 0.0, 0.0, 1.0 } };
     rgCmdSetRenderPass(cmd_buffer, backbuffer_pass, 1, backbuffer_clear_values);
 
     rgCmdBindPipeline(cmd_buffer, app->backbuffer_pipeline);
@@ -219,6 +323,10 @@ void AppRenderFrame(App *app)
     rgSwapchainPresent(swapchain);
 
     app->current_frame = (app->current_frame + 1) % 2;
+    if (app->current_frame == 0)
+    {
+        UniformBufferReset(app->uniform_buffer);
+    }
 }
 
 void AppRun(App *app)
@@ -226,6 +334,11 @@ void AppRun(App *app)
     while (!PlatformShouldClose(app->platform))
     {
         PlatformPollEvents(app->platform);
+
+        double now = PlatformGetTime(app->platform);
+        app->delta_time = now - app->last_time;
+        app->last_time = now;
+
         Event event = {};
         while (PlatformNextEvent(app->platform, &event))
         {
@@ -234,6 +347,16 @@ void AppRun(App *app)
             case EVENT_WINDOW_RESIZED:
             {
                 AppResize(app);
+                break;
+            }
+            case EVENT_KEY_PRESSED:
+            {
+                if (event.keyboard.key == KEY_ESCAPE)
+                {
+                    PlatformSetCursorEnabled(
+                            app->platform,
+                            !PlatformGetCursorEnabled(app->platform));
+                }
                 break;
             }
             }

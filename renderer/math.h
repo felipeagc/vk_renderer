@@ -131,7 +131,7 @@ union Vec3
     }
 };
 
-union alignas(16) Vec4
+union Vec4
 {
     struct {
         union {
@@ -182,27 +182,11 @@ union alignas(16) Vec4
     }
 };
 
-union alignas(16) Mat4
+union Mat4
 {
     float cols[4][4];
     float elems[16];
     Vec4 v[4];
-
-    MATH_INLINE
-    Mat4()
-    {
-        memset(this, 0, sizeof(*this));
-    }
-
-    MATH_INLINE
-    Mat4(float diagonal)
-    {
-        memset(this, 0, sizeof(*this));
-        this->cols[0][0] = diagonal;
-        this->cols[1][1] = diagonal;
-        this->cols[2][2] = diagonal;
-        this->cols[3][3] = diagonal;
-    }
 
     Vec4 &operator[](int index)
     {
@@ -210,28 +194,51 @@ union alignas(16) Mat4
     }
 };
 
-union alignas(16) Quat
+struct Quat
 {
-    struct { float x, y, z, w; };
-
-    MATH_INLINE
-    Quat()
-    {
-        this->x = 0.0f;
-        this->y = 0.0f;
-        this->z = 0.0f;
-        this->w = 1.0f;
-    }
-
-    MATH_INLINE
-    Quat(float x, float y, float z, float w)
-    {
-        this->x = x;
-        this->y = y;
-        this->z = z;
-        this->w = w;
-    }
+    float x, y, z, w;
 };
+
+MATH_INLINE
+static Vec2 V2(float x, float y)
+{
+    Vec2 v;
+    v.x = x;
+    v.y = y;
+    return v;
+}
+
+MATH_INLINE
+static Vec3 V3(float x, float y, float z)
+{
+    Vec3 v;
+    v.x = x;
+    v.y = y;
+    v.z = z;
+    return v;
+}
+
+MATH_INLINE
+static Vec4 V4(float x, float y, float z, float w)
+{
+    Vec4 v;
+    v.x = x;
+    v.y = y;
+    v.z = z;
+    v.w = w;
+    return v;
+}
+
+MATH_INLINE
+static Mat4 Mat4Diagonal(float v)
+{
+    Mat4 mat = {};
+    mat.cols[0][0] = v;
+    mat.cols[1][1] = v;
+    mat.cols[2][2] = v;
+    mat.cols[3][3] = v;
+    return mat;
+}
 
 /////////////////////////////
 //
@@ -248,7 +255,7 @@ static float length(Vec3 vec)
 MATH_INLINE
 static Vec3 operator+(Vec3 left, Vec3 right)
 {
-    return Vec3(
+    return V3(
         left.x + right.x,
         left.y + right.y,
         left.z + right.z
@@ -258,7 +265,7 @@ static Vec3 operator+(Vec3 left, Vec3 right)
 MATH_INLINE
 static Vec3 operator+(Vec3 left, float right)
 {
-    return Vec3(
+    return V3(
         left.x + right,
         left.y + right,
         left.z + right
@@ -268,7 +275,7 @@ static Vec3 operator+(Vec3 left, float right)
 MATH_INLINE
 static Vec3 operator-(Vec3 left, Vec3 right)
 {
-    return Vec3(
+    return V3(
         left.x - right.x,
         left.y - right.y,
         left.z - right.z
@@ -278,7 +285,7 @@ static Vec3 operator-(Vec3 left, Vec3 right)
 MATH_INLINE
 static Vec3 operator-(Vec3 left, float right)
 {
-    return Vec3(
+    return V3(
         left.x - right,
         left.y - right,
         left.z - right
@@ -288,7 +295,7 @@ static Vec3 operator-(Vec3 left, float right)
 MATH_INLINE
 static Vec3 operator*(Vec3 left, Vec3 right)
 {
-    return Vec3(
+    return V3(
         left.x * right.x,
         left.y * right.y,
         left.z * right.z
@@ -298,7 +305,7 @@ static Vec3 operator*(Vec3 left, Vec3 right)
 MATH_INLINE
 static Vec3 operator*(Vec3 left, float right)
 {
-    return Vec3(
+    return V3(
         left.x * right,
         left.y * right,
         left.z * right
@@ -308,7 +315,7 @@ static Vec3 operator*(Vec3 left, float right)
 MATH_INLINE
 static Vec3 operator/(Vec3 left, Vec3 right)
 {
-    return Vec3(
+    return V3(
         left.x / right.x,
         left.y / right.y,
         left.z / right.z
@@ -318,7 +325,7 @@ static Vec3 operator/(Vec3 left, Vec3 right)
 MATH_INLINE
 static Vec3 operator/(Vec3 left, float right)
 {
-    return Vec3(
+    return V3(
         left.x / right,
         left.y / right,
         left.z / right
@@ -367,7 +374,7 @@ static Vec3 normalize(Vec3 vec)
 MATH_INLINE
 static Vec4 operator+(Vec4 left, Vec4 right)
 {
-    return Vec4(
+    return V4(
         left.x + right.x,
         left.y + right.y,
         left.z + right.z,
@@ -378,7 +385,7 @@ static Vec4 operator+(Vec4 left, Vec4 right)
 MATH_INLINE
 static Vec4 operator+(Vec4 left, float right)
 {
-    return Vec4(
+    return V4(
         left.x + right,
         left.y + right,
         left.z + right,
@@ -389,7 +396,7 @@ static Vec4 operator+(Vec4 left, float right)
 MATH_INLINE
 static Vec4 operator-(Vec4 left, Vec4 right)
 {
-    return Vec4(
+    return V4(
         left.x - right.x,
         left.y - right.y,
         left.z - right.z,
@@ -400,7 +407,7 @@ static Vec4 operator-(Vec4 left, Vec4 right)
 MATH_INLINE
 static Vec4 operator-(Vec4 left, float right)
 {
-    return Vec4(
+    return V4(
         left.x - right,
         left.y - right,
         left.z - right,
@@ -411,7 +418,7 @@ static Vec4 operator-(Vec4 left, float right)
 MATH_INLINE
 static Vec4 operator*(Vec4 left, Vec4 right)
 {
-    return Vec4(
+    return V4(
         left.x * right.x,
         left.y * right.y,
         left.z * right.z,
@@ -422,7 +429,7 @@ static Vec4 operator*(Vec4 left, Vec4 right)
 MATH_INLINE
 static Vec4 operator*(Vec4 left, float right)
 {
-    return Vec4(
+    return V4(
         left.x * right,
         left.y * right,
         left.z * right,
@@ -433,7 +440,7 @@ static Vec4 operator*(Vec4 left, float right)
 MATH_INLINE
 static Vec4 operator/(Vec4 left, Vec4 right)
 {
-    return Vec4(
+    return V4(
         left.x / right.x,
         left.y / right.y,
         left.z / right.z,
@@ -444,7 +451,7 @@ static Vec4 operator/(Vec4 left, Vec4 right)
 MATH_INLINE
 static Vec4 operator/(Vec4 left, float right)
 {
-    return Vec4(
+    return V4(
         left.x / right,
         left.y / right,
         left.z / right,
@@ -470,7 +477,7 @@ static float dot(Vec4 left, Vec4 right)
 MATH_INLINE
 static Mat4 operator+(const Mat4 &left, const Mat4 &right)
 {
-    Mat4 result;
+    Mat4 result = {};
     for (unsigned char i = 0; i < 16; i++) {
         result.elems[i] = left.elems[i] + right.elems[i];
     }
@@ -480,7 +487,7 @@ static Mat4 operator+(const Mat4 &left, const Mat4 &right)
 MATH_INLINE
 static Mat4 operator-(const Mat4 &left, const Mat4 &right)
 {
-    Mat4 result;
+    Mat4 result = {};
     for (unsigned char i = 0; i < 16; i++) {
         result.elems[i] = left.elems[i] - right.elems[i];
     }
@@ -490,7 +497,7 @@ static Mat4 operator-(const Mat4 &left, const Mat4 &right)
 MATH_INLINE
 static Mat4 operator*(const Mat4 &left, float right)
 {
-    Mat4 result;
+    Mat4 result = {};
     for (unsigned char i = 0; i < 16; i++) {
         result.elems[i] = left.elems[i] * right;
     }
@@ -500,7 +507,7 @@ static Mat4 operator*(const Mat4 &left, float right)
 MATH_INLINE
 static Mat4 operator/(const Mat4 &left, float right)
 {
-    Mat4 result;
+    Mat4 result = {};
     for (unsigned char i = 0; i < 16; i++) {
         result.elems[i] = left.elems[i] / right;
     }
@@ -521,7 +528,8 @@ static Mat4 operator*(const Mat4 &left, const Mat4 &right)
     return result;
 }
 
-static Vec4 operator*(const Mat4 &left, const Vec4 &right)
+static inline
+Vec4 operator*(const Mat4 &left, const Vec4 &right)
 {
     Vec4 result;
 
@@ -549,7 +557,8 @@ static Vec4 operator*(const Mat4 &left, const Vec4 &right)
     return result;
 }
 
-static Mat4 Mat4Transpose(const Mat4 &mat)
+static inline
+Mat4 Mat4Transpose(const Mat4 &mat)
 {
     Mat4 result = mat;
     result.cols[0][1] = mat.cols[1][0];
@@ -570,7 +579,8 @@ static Mat4 Mat4Transpose(const Mat4 &mat)
     return result;
 }
 
-static Mat4 Mat4Inverse(const Mat4 &mat)
+static inline
+Mat4 Mat4Inverse(const Mat4 &mat)
 {
     Mat4 inv = {};
 
@@ -631,42 +641,44 @@ static Mat4 Mat4Inverse(const Mat4 &mat)
     return inv;
 }
 
-static Mat4 Mat4Perspective(float fovy, float aspect_ratio, float znear, float zfar)
+static inline
+Mat4 Mat4Perspective(float fovy, float aspect, float n, float f)
+{
+    float c = 1.0 / tanf(fovy / 2.0);
+
+    Mat4 result = {};
+    result.v[0] = V4(c/aspect, 0,  0,                 0);
+    result.v[1] = V4(0,        c,  0,                 0);
+    result.v[2] = V4(0,        0, -(f+n)/(f-n),      -1);
+    result.v[3] = V4(0,        0, -(2.0*f*n)/(f-n),   0);
+    return result;
+}
+
+static inline
+Mat4 Mat4PerspectiveReverseZ(float fovy, float aspect_ratio, float z_near)
 {
     Mat4 result = {};
 
-    float tan_half_fovy = tanf(fovy / 2.0f);
+    float t = tanf(fovy / 2.0f);
+    float sy = 1.0f / t;
+    float sx = sy / aspect_ratio;
 
-    result.cols[0][0] = 1.0f / (aspect_ratio * tan_half_fovy);
-    result.cols[1][1] = 1.0f / tan_half_fovy;
-    result.cols[2][2] = -(zfar + znear) / (zfar - znear);
-    result.cols[2][3] = -1.0f;
-    result.cols[3][2] = -(2.0f * zfar * znear) / (zfar - znear);
+    result.v[0] = V4(sx,    0.0f,  0.0f, 0.0f);
+    result.v[1] = V4(0.0f, -sy,    0.0f, 0.0f);
+    result.v[2] = V4(0.0f,  0.0f,  0.0f, z_near);
+    result.v[3] = V4(0.0f,  0.0f, -1.0f, 0.0f);
 
     return result;
 }
 
-static Mat4 Mat4PerspectiveReverseZ(float fovy, float aspect_ratio, float znear)
-{
-    Mat4 result = {};
-
-    float tan_half_fovy = tanf(fovy / 2.0f);
-
-    result.cols[0][0] = 1.0f / (aspect_ratio * tan_half_fovy);
-    result.cols[1][1] = 1.0f / tan_half_fovy;
-    result.cols[2][3] = -1.0f;
-    result.cols[3][2] = znear;
-
-    return result;
-}
-
-static Mat4 Mat4LookAt(Vec3 eye, Vec3 center, Vec3 up)
+static inline
+Mat4 Mat4LookAt(Vec3 eye, Vec3 center, Vec3 up)
 {
     Vec3 f = normalize(center - eye);
-    Vec3 s = normalize(f - up);
+    Vec3 s = normalize(cross(f, up));
     Vec3 u = cross(s, f);
 
-    Mat4 result(1.0f);
+    Mat4 result = Mat4Diagonal(1.0f);
 
     result.cols[0][0] = s.x;
     result.cols[1][0] = s.y;
@@ -687,23 +699,24 @@ static Mat4 Mat4LookAt(Vec3 eye, Vec3 center, Vec3 up)
     return result;
 }
 
-MATH_INLINE
-static void Mat4Translate(Mat4 *mat, Vec3 translation)
+MATH_INLINE static
+void Mat4Translate(Mat4 *mat, Vec3 translation)
 {
     mat->cols[3][0] += translation.x;
     mat->cols[3][1] += translation.y;
     mat->cols[3][2] += translation.z;
 }
 
-MATH_INLINE
-static void Mat4Scale(Mat4 *mat, Vec3 scale)
+MATH_INLINE static
+void Mat4Scale(Mat4 *mat, Vec3 scale)
 {
     mat->cols[0][0] *= scale.x;
     mat->cols[1][1] *= scale.y;
     mat->cols[2][2] *= scale.z;
 }
 
-static void Mat4Rotate(Mat4 *mat, float angle, Vec3 axis)
+static inline
+void Mat4Rotate(Mat4 *mat, float angle, Vec3 axis)
 {
     float c = cosf(angle);
     float s = sinf(angle);
@@ -711,7 +724,7 @@ static void Mat4Rotate(Mat4 *mat, float angle, Vec3 axis)
     axis = normalize(axis);
     Vec3 temp = axis * (1.0f - c);
 
-    Mat4 rotate;
+    Mat4 rotate = {};
     rotate.cols[0][0] = c + temp.x * axis.x;
     rotate.cols[0][1] = temp.x * axis.y + s * axis.z;
     rotate.cols[0][2] = temp.x * axis.z - s * axis.y;
@@ -724,7 +737,7 @@ static void Mat4Rotate(Mat4 *mat, float angle, Vec3 axis)
     rotate.cols[2][1] = temp.z * axis.y - s * axis.x;
     rotate.cols[2][2] = c + temp.z * axis.z;
 
-    Mat4 result;
+    Mat4 result = {};
     result.v[0] =
         (mat->v[0] * rotate.cols[0][0]) +
         (mat->v[1] * rotate.cols[0][1]) +
@@ -789,8 +802,8 @@ static Quat QuatConjugate(Quat quat)
     return result;
 }
 
-MATH_INLINE
-static Quat QuatLookAt(Vec3 direction, Vec3 up)
+static inline
+Quat QuatLookAt(Vec3 direction, Vec3 up)
 {
     float m[3][3] = {
         {0, 0, 0},
@@ -883,8 +896,8 @@ static Quat QuatFromAxisAngle(Vec3 axis, float angle)
     return result;
 }
 
-MATH_INLINE
-static Quat QuatFromMat4(const Mat4 &mat)
+static inline
+Quat QuatFromMat4(const Mat4 &mat)
 {
     Quat result;
     float trace = mat.cols[0][0] + mat.cols[1][1] + mat.cols[2][2];
@@ -920,8 +933,8 @@ static Quat QuatFromMat4(const Mat4 &mat)
     return result;
 }
 
-MATH_INLINE
-static void QuatToAxisAngle(Quat quat, Vec3 *axis, float *angle)
+static inline
+void QuatToAxisAngle(Quat quat, Vec3 *axis, float *angle)
 {
     quat = normalize(quat);
     *angle = 2.0f * acosf(quat.w);
@@ -937,10 +950,10 @@ static void QuatToAxisAngle(Quat quat, Vec3 *axis, float *angle)
     }
 }
 
-MATH_INLINE
-static Mat4 QuatToMat4(Quat quat)
+static inline
+Mat4 QuatToMat4(Quat quat)
 {
-    Mat4 result(1.0f);
+    Mat4 result = Mat4Diagonal(1.0f);
 
     float xx = quat.x * quat.x;
     float yy = quat.y * quat.y;

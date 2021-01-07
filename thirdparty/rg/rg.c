@@ -4389,8 +4389,8 @@ void rgCmdSetRenderPass(
     VkViewport viewport = {0};
     viewport.width = (float)render_pass->width;
     viewport.height = (float)render_pass->height;
-    viewport.minDepth = (float) 0.0f;
-    viewport.maxDepth = (float) 1.0f;
+    viewport.minDepth = (float)0.0f;
+    viewport.maxDepth = (float)1.0f;
     vkCmdSetViewport(cmd_buffer->cmd_buffer, 0, 1, &viewport);
 
     // Update dynamic scissor state

@@ -4,17 +4,16 @@ project(renderer VERSION 1.0 LANGUAGES C CXX)
 add_library(
 	renderer
 
-	renderer/platform.hpp
+	renderer/platform.h
 	renderer/platform.cpp
-	renderer/math.hpp
-	renderer/camera.hpp
+	renderer/math.h
+	renderer/camera.h
 	renderer/camera.cpp
+	renderer/mesh.h
+	renderer/mesh.cpp
 
-	thirdparty/cgltf/cgltf.h
-	thirdparty/cgltf/cgltf.c
-
-	thirdparty/stb_image/stb_image.h
-	thirdparty/stb_image/stb_image.c
+	renderer/allocator.h
+	renderer/allocator.c
 
 	thirdparty/rg/rg.h
 	thirdparty/rg/rg.c
@@ -25,6 +24,16 @@ add_library(
 
 	thirdparty/tinyshader/tinyshader/tinyshader.h
 	thirdparty/tinyshader/tinyshader/tinyshader_unity.c
+)
+
+add_library(
+	renderer_libs
+
+	thirdparty/cgltf/cgltf.h
+	thirdparty/cgltf/cgltf.c
+
+	thirdparty/stb_image/stb_image.h
+	thirdparty/stb_image/stb_image.c
 
 	thirdparty/imgui/cimgui.cpp
 	thirdparty/imgui/cimgui.h
@@ -43,7 +52,7 @@ add_library(
 target_include_directories(
 	renderer
 	PUBLIC
-	renderer
+	.
 	thirdparty/rg
 	thirdparty/tinyshader
 	thirdparty/stb_image
@@ -52,7 +61,14 @@ target_include_directories(
 	thirdparty/cgltf
 )
 
-set_property(TARGET renderer PROPERTY CXX_STANDARD 17)
+target_link_libraries(renderer PUBLIC renderer_libs)
+
+set_property(TARGET renderer PROPERTY CXX_STANDARD 11)
+if(MSVC)
+  target_compile_options(renderer PRIVATE /W4 /WX)
+else()
+  target_compile_options(renderer PRIVATE -Wall -Wextra -Werror)
+endif()
 
 if (UNIX)
 	target_link_libraries(renderer PUBLIC dl m pthread X11 Xau)
@@ -64,4 +80,4 @@ endif(WIN32)
 
 add_executable(app app/main.cpp)
 target_link_libraries(app PUBLIC renderer)
-set_property(TARGET app PROPERTY CXX_STANDARD 17)
+set_property(TARGET app PROPERTY CXX_STANDARD 11)

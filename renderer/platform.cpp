@@ -1,4 +1,4 @@
-#include "platform.hpp"
+#include "platform.h"
 
 #include <rg.h>
 #include <stdlib.h>
@@ -183,6 +183,7 @@ RgSwapchain *PlatformGetSwapchain(Platform *platform)
 
 double PlatformGetTime(Platform *platform)
 {
+    (void)platform;
     return glfwGetTime();
 }
 
@@ -205,12 +206,9 @@ void PlatformSetCursorEnabled(Platform *platform, bool enabled)
     glfwSetInputMode(platform->window, GLFW_CURSOR, mode);
 }
 
-void PlatformGetCursorPos(Platform *platform, int32_t *x, int32_t *y)
+void PlatformGetCursorPos(Platform *platform, double *x, double *y)
 {
-    double dx, dy;
-    glfwGetCursorPos(platform->window, &dx, &dy);
-    *x = (int32_t)dx;
-    *y = (int32_t)dy;
+    glfwGetCursorPos(platform->window, x, y);
 }
 
 bool PlatformGetKeyState(Platform *platform, Key key)
@@ -244,6 +242,7 @@ bool PlatformShouldClose(Platform *platform)
 
 void PlatformPollEvents(Platform *platform)
 {
+    (void)platform;
     glfwPollEvents();
 }
 
@@ -424,27 +423,24 @@ RgPipeline *PlatformCreatePipeline(Platform *platform, const char *hlsl, size_t 
         tsCompilerOptionsDestroy(options);
     }
 
-    RgGraphicsPipelineInfo pipeline_info = {
-        .polygon_mode = RG_POLYGON_MODE_FILL,
-        .cull_mode = RG_CULL_MODE_NONE,
-        .front_face = RG_FRONT_FACE_CLOCKWISE,
-        .topology = RG_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-        .blend = { .enable = false },
-        .depth_stencil = {
-            .test_enable = true,
-            .write_enable = true,
-            .bias_enable = false,
-            .compare_op = RG_COMPARE_OP_GREATER_OR_EQUAL,
-        },
+    RgGraphicsPipelineInfo pipeline_info = {};
+    pipeline_info.polygon_mode = RG_POLYGON_MODE_FILL;
+    pipeline_info.cull_mode = RG_CULL_MODE_NONE;
+    pipeline_info.front_face = RG_FRONT_FACE_CLOCKWISE;
+    pipeline_info.topology = RG_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    pipeline_info.blend.enable = false;
+    pipeline_info.depth_stencil.test_enable = true;
+    pipeline_info.depth_stencil.write_enable = true;
+    pipeline_info.depth_stencil.bias_enable = false;
+    pipeline_info.depth_stencil.compare_op = RG_COMPARE_OP_LESS;
 
-        .vertex = vertex_code,
-        .vertex_size = vertex_code_size,
-        .vertex_entry = "vertex",
+    pipeline_info.vertex = vertex_code;
+    pipeline_info.vertex_size = vertex_code_size;
+    pipeline_info.vertex_entry = "vertex";
 
-        .fragment = fragment_code,
-        .fragment_size = fragment_code_size,
-        .fragment_entry = "pixel",
-    };
+    pipeline_info.fragment = fragment_code;
+    pipeline_info.fragment_size = fragment_code_size;
+    pipeline_info.fragment_entry = "pixel";
 
     const char *pragma = "#pragma";
     size_t pragma_len = strlen(pragma);
@@ -560,7 +556,7 @@ static void eventQueueWindowPosCallback(GLFWwindow* window, int x, int y)
 {
     Event* event = eventQueueNewEvent();
     event->type = EVENT_WINDOW_MOVED;
-    /* event->window = window; */
+    event->window = window;
     event->pos.x = x;
     event->pos.y = y;
 }
@@ -569,7 +565,7 @@ static void eventQueueWindowSizeCallback(GLFWwindow* window, int width, int heig
 {
     Event* event = eventQueueNewEvent();
     event->type = EVENT_WINDOW_RESIZED;
-    /* event->window = window; */
+    event->window = window;
     event->size.width = width;
     event->size.height = height;
 }
@@ -578,20 +574,20 @@ static void eventQueueWindowCloseCallback(GLFWwindow* window)
 {
     Event* event = eventQueueNewEvent();
     event->type = EVENT_WINDOW_CLOSED;
-    /* event->window = window; */
+    event->window = window;
 }
 
 static void eventQueueWindowRefreshCallback(GLFWwindow* window)
 {
     Event* event = eventQueueNewEvent();
     event->type = EVENT_WINDOW_REFRESH;
-    /* event->window = window; */
+    event->window = window;
 }
 
 static void eventQueueWindowFocusCallback(GLFWwindow* window, int focused)
 {
     Event* event = eventQueueNewEvent();
-    /* event->window = window; */
+    event->window = window;
 
     if (focused)
         event->type = EVENT_WINDOW_FOCUSED;
@@ -602,7 +598,7 @@ static void eventQueueWindowFocusCallback(GLFWwindow* window, int focused)
 static void eventQueueWindowIconifyCallback(GLFWwindow* window, int iconified)
 {
     Event* event = eventQueueNewEvent();
-    /* event->window = window; */
+    event->window = window;
 
     if (iconified)
         event->type = EVENT_WINDOW_ICONIFIED;
@@ -614,7 +610,7 @@ static void eventQueueFramebufferSizeCallback(GLFWwindow* window, int width, int
 {
     Event* event = eventQueueNewEvent();
     event->type = EVENT_FRAMEBUFFER_RESIZED;
-    /* event->window = window; */
+    event->window = window;
     event->size.width = width;
     event->size.height = height;
 }
@@ -622,7 +618,7 @@ static void eventQueueFramebufferSizeCallback(GLFWwindow* window, int width, int
 static void eventQueueMouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
 {
     Event* event = eventQueueNewEvent();
-    /* event->window = window; */
+    event->window = window;
     event->mouse.button = button;
     event->mouse.mods = mods;
 
@@ -636,7 +632,7 @@ static void eventQueueCursorPosCallback(GLFWwindow* window, double x, double y)
 {
     Event* event = eventQueueNewEvent();
     event->type = EVENT_CURSOR_MOVED;
-    /* event->window = window; */
+    event->window = window;
     event->pos.x = (int) x;
     event->pos.y = (int) y;
 }
@@ -644,7 +640,7 @@ static void eventQueueCursorPosCallback(GLFWwindow* window, double x, double y)
 static void eventQueueCursorEnterCallback(GLFWwindow* window, int entered)
 {
     Event* event = eventQueueNewEvent();
-    /* event->window = window; */
+    event->window = window;
 
     if (entered)
         event->type = EVENT_CURSOR_ENTERED;
@@ -656,7 +652,7 @@ static void eventQueueScrollCallback(GLFWwindow* window, double x, double y)
 {
     Event* event = eventQueueNewEvent();
     event->type = EVENT_SCROLLED;
-    /* event->window = window; */
+    event->window = window;
     event->scroll.x = x;
     event->scroll.y = y;
 }
@@ -664,7 +660,7 @@ static void eventQueueScrollCallback(GLFWwindow* window, double x, double y)
 static void eventQueueKeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     Event* event = eventQueueNewEvent();
-    /* event->window = window; */
+    event->window = window;
     event->keyboard.key = key;
     event->keyboard.scancode = scancode;
     event->keyboard.mods = mods;
@@ -681,14 +677,14 @@ static void eventQueueCharCallback(GLFWwindow* window, unsigned int codepoint)
 {
     Event* event = eventQueueNewEvent();
     event->type = EVENT_CODEPOINT_INPUT;
-    /* event->window = window; */
+    event->window = window;
     event->codepoint = codepoint;
 }
 
 static void eventQueueMonitorCallback(GLFWmonitor* monitor, int action)
 {
     Event* event = eventQueueNewEvent();
-    /* event->monitor = monitor; */
+    event->monitor = monitor;
 
     if (action == GLFW_CONNECTED)
         event->type = EVENT_MONITOR_CONNECTED;
@@ -700,7 +696,7 @@ static void eventQueueFileDropCallback(GLFWwindow* window, int count, const char
 {
     Event* event = eventQueueNewEvent();
     event->type = EVENT_FILE_DROPPED;
-    /* event->window = window; */
+    event->window = window;
     event->file.paths = (char**) malloc(count * sizeof(char*));
     event->file.count = count;
 
@@ -722,7 +718,7 @@ static void eventQueueJoystickCallback(int jid, int action)
 static void eventQueueWindowMaximizeCallback(GLFWwindow* window, int maximized)
 {
     Event* event = eventQueueNewEvent();
-    /* event->window = window; */
+    event->window = window;
 
     if (maximized)
         event->type = EVENT_WINDOW_MAXIMIZED;
@@ -733,13 +729,14 @@ static void eventQueueWindowMaximizeCallback(GLFWwindow* window, int maximized)
 static void eventQueueWindowContentScaleCallback(GLFWwindow* window, float xscale, float yscale)
 {
     Event* event = eventQueueNewEvent();
-    /* event->window = window; */
+    event->window = window;
     event->type = EVENT_WINDOW_SCALE_CHANGED;
     event->scale.x = xscale;
     event->scale.y = yscale;
 }
 
-static void eventFree(Event* event)
+static inline
+void eventFree(Event* event)
 {
     if (event->type == EVENT_FILE_DROPPED)
     {

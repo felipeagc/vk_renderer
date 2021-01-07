@@ -39,8 +39,8 @@ struct Event
 {
     EventType type;
     union {
-        /* GLFWwindow* window; */
-        /* GLFWmonitor* monitor; */
+        void* window;
+        void* monitor;
         int joystick;
     };
     union {
@@ -237,7 +237,7 @@ double PlatformGetTime(Platform *platform);
 void PlatformGetWindowSize(Platform *platform, uint32_t *width, uint32_t *height);
 bool PlatformGetCursorEnabled(Platform *platform);
 void PlatformSetCursorEnabled(Platform *platform, bool enabled);
-void PlatformGetCursorPos(Platform *platform, int32_t *x, int32_t *y);
+void PlatformGetCursorPos(Platform *platform, double *x, double *y);
 bool PlatformGetKeyState(Platform *platform, Key key);
 bool PlatformGetButtonState(Platform *platform, Button button);
 
