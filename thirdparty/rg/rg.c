@@ -1898,8 +1898,7 @@ void rgBufferUpload(
     size_t size,
     void *data)
 {
-    VkCommandBuffer cmd_buffer = VK_NULL_HANDLE;
-    VkFence fence = VK_NULL_HANDLE;
+    RgCmdBuffer *cmd_buffer = rgCmdBufferCreate(device, cmd_pool);
 
     RgBufferInfo buffer_info;
     memset(&buffer_info, 0, sizeof(buffer_info));
@@ -1913,51 +1912,21 @@ void rgBufferUpload(
     memcpy(staging_ptr, data, size);
     rgBufferUnmap(device, staging);
 
-    VkFenceCreateInfo fence_info;
-    memset(&fence_info, 0, sizeof(fence_info));
-    fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    VK_CHECK(vkCreateFence(device->device, &fence_info, NULL, &fence));
-
-    VkCommandBufferAllocateInfo alloc_info;
-    memset(&alloc_info, 0, sizeof(alloc_info));
-    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    alloc_info.commandPool = cmd_pool->cmd_pool;
-    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    alloc_info.commandBufferCount = 1;
-
-    VK_CHECK(vkAllocateCommandBuffers(device->device, &alloc_info, &cmd_buffer));
-
-    VkCommandBufferBeginInfo begin_info;
-    memset(&begin_info, 0, sizeof(begin_info));
-    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    VK_CHECK(vkBeginCommandBuffer(cmd_buffer, &begin_info));
+    rgCmdBufferBegin(cmd_buffer);
 
     VkBufferCopy region;
     memset(&region, 0, sizeof(region));
     region.srcOffset = 0;
     region.dstOffset = offset;
     region.size = size;
-    vkCmdCopyBuffer(cmd_buffer, staging->buffer, buffer->buffer, 1, &region);
+    vkCmdCopyBuffer(cmd_buffer->cmd_buffer, staging->buffer, buffer->buffer, 1, &region);
 
-    VK_CHECK(vkEndCommandBuffer(cmd_buffer));
+    rgCmdBufferEnd(cmd_buffer);
 
-    VkSubmitInfo submit;
-    memset(&submit, 0, sizeof(submit));
-    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit.commandBufferCount = 1;
-    submit.pCommandBuffers = &cmd_buffer;
+    rgCmdBufferSubmit(cmd_buffer);
 
-    VK_CHECK(vkQueueSubmit(device->graphics_queue, 1, &submit, fence));
-
-    VK_CHECK(vkWaitForFences(device->device, 1, &fence, VK_TRUE, UINT64_MAX));
-    vkDestroyFence(device->device, fence, NULL);
-
-    vkFreeCommandBuffers(
-            device->device,
-            cmd_pool->cmd_pool,
-            1,
-            &cmd_buffer);
+    rgCmdBufferWait(device, cmd_buffer);
+    rgCmdBufferDestroy(device, cmd_pool, cmd_buffer);
 
     rgBufferDestroy(device, staging);
 }
@@ -2129,8 +2098,7 @@ void rgImageUpload(
     size_t size,
     void *data)
 {
-    VkCommandBuffer cmd_buffer = VK_NULL_HANDLE;
-    VkFence fence = VK_NULL_HANDLE;
+    RgCmdBuffer *cmd_buffer = rgCmdBufferCreate(device, cmd_pool);
 
     RgBufferInfo buffer_info;
     memset(&buffer_info, 0, sizeof(buffer_info));
@@ -2144,25 +2112,7 @@ void rgImageUpload(
     memcpy(staging_ptr, data, size);
     rgBufferUnmap(device, staging);
 
-    VkFenceCreateInfo fence_info;
-    memset(&fence_info, 0, sizeof(fence_info));
-    fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    VK_CHECK(vkCreateFence(device->device, &fence_info, NULL, &fence));
-
-    VkCommandBufferAllocateInfo alloc_info;
-    memset(&alloc_info, 0, sizeof(alloc_info));
-    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    alloc_info.commandPool = cmd_pool->cmd_pool;
-    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    alloc_info.commandBufferCount = 1;
-
-    VK_CHECK(vkAllocateCommandBuffers(device->device, &alloc_info, &cmd_buffer));
-
-    VkCommandBufferBeginInfo begin_info;
-    memset(&begin_info, 0, sizeof(begin_info));
-    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    VK_CHECK(vkBeginCommandBuffer(cmd_buffer, &begin_info));
+    rgCmdBufferBegin(cmd_buffer);
 
     VkImageSubresourceRange subresource_range;
     memset(&subresource_range, 0, sizeof(subresource_range));
@@ -2185,7 +2135,7 @@ void rgImageUpload(
     barrier.subresourceRange = subresource_range;
 
     vkCmdPipelineBarrier(
-        cmd_buffer,
+        cmd_buffer->cmd_buffer,
         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
         VK_PIPELINE_STAGE_TRANSFER_BIT,
         0,
@@ -2210,7 +2160,7 @@ void rgImageUpload(
     region.imageExtent.depth = extent->depth;
 
     vkCmdCopyBufferToImage(
-        cmd_buffer,
+        cmd_buffer->cmd_buffer,
         staging->buffer,
         dst->image->image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -2223,7 +2173,7 @@ void rgImageUpload(
     barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
     vkCmdPipelineBarrier(
-        cmd_buffer,
+        cmd_buffer->cmd_buffer,
         VK_PIPELINE_STAGE_TRANSFER_BIT,
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         0,
@@ -2234,24 +2184,13 @@ void rgImageUpload(
         1,
         &barrier);
 
-    VK_CHECK(vkEndCommandBuffer(cmd_buffer));
+    rgCmdBufferEnd(cmd_buffer);
 
-    VkSubmitInfo submit;
-    memset(&submit, 0, sizeof(submit));
-    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit.commandBufferCount = 1;
-    submit.pCommandBuffers = &cmd_buffer;
+    rgCmdBufferSubmit(cmd_buffer);
 
-    VK_CHECK(vkQueueSubmit(device->graphics_queue, 1, &submit, fence));
+    rgCmdBufferWait(device, cmd_buffer);
 
-    VK_CHECK(vkWaitForFences(device->device, 1, &fence, VK_TRUE, UINT64_MAX));
-    vkDestroyFence(device->device, fence, NULL);
-
-    vkFreeCommandBuffers(
-            device->device,
-            cmd_pool->cmd_pool,
-            1,
-            &cmd_buffer);
+    rgCmdBufferDestroy(device, cmd_pool, cmd_buffer);
 
     rgBufferDestroy(device, staging);
 }
@@ -4039,6 +3978,11 @@ void rgCmdBufferWaitForCommands(RgCmdBuffer *cmd_buffer, RgCmdBuffer *wait_cmd_b
 {
     arrPush(&cmd_buffer->wait_semaphores, wait_cmd_buffer->semaphore);
     arrPush(&cmd_buffer->wait_stages, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+}
+
+void rgCmdBufferWait(RgDevice *device, RgCmdBuffer *cmd_buffer)
+{
+    VK_CHECK(vkWaitForFences(device->device, 1, &cmd_buffer->fence, VK_TRUE, UINT64_MAX));
 }
 
 void rgCmdBufferSubmit(RgCmdBuffer *cmd_buffer)

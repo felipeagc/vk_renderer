@@ -481,6 +481,7 @@ void rgCmdBufferBegin(RgCmdBuffer *cmd_buffer);
 void rgCmdBufferEnd(RgCmdBuffer *cmd_buffer);
 void rgCmdBufferWaitForPresent(RgCmdBuffer *cmd_buffer, RgSwapchain *swapchain);
 void rgCmdBufferWaitForCommands(RgCmdBuffer *cmd_buffer, RgCmdBuffer *wait_cmd_buffer);
+void rgCmdBufferWait(RgDevice *device, RgCmdBuffer *cmd_buffer);
 void rgCmdBufferSubmit(RgCmdBuffer *cmd_buffer);
 
 void rgCmdBindPipeline(RgCmdBuffer *cmd_buffer, RgPipeline *pipeline);
