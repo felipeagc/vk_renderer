@@ -9,6 +9,7 @@
 #include <spirv.h>
 #include "allocator.h"
 #include "platform.h"
+#include "engine.h"
 #include "math.h"
 #include "array.h"
 
@@ -56,8 +57,8 @@ typedef struct ModuleInfo
 
 struct PipelineAsset
 {
-    Platform *platform;
     Allocator *allocator;
+    Engine *engine;
     RgPipeline *pipeline;
 
     uint32_t set_layout_count;
@@ -142,7 +143,7 @@ static bool stringToCompareOp(const char *str, size_t len, RgCompareOp *value)
 
 PipelineAsset *PipelineAssetCreateGraphics(
         Allocator *allocator,
-        Platform *platform,
+        Engine *engine,
         const char *hlsl,
         size_t hlsl_size)
 {
@@ -151,8 +152,9 @@ PipelineAsset *PipelineAssetCreateGraphics(
     *pipeline_asset = {};
 
     pipeline_asset->allocator = allocator;
-    pipeline_asset->platform = platform;
+    pipeline_asset->engine = engine;
 
+    Platform *platform = EngineGetPlatform(pipeline_asset->engine);
     RgDevice *device = PlatformGetDevice(platform);
 
     uint8_t *vertex_code = NULL;
@@ -375,7 +377,7 @@ PipelineAsset *PipelineAssetCreateGraphics(
                         entries[b].type = module->sets[i].bindings[b];
                         entries[b].binding = b;
                         entries[b].count = 1;
-                        entries[b].shader_stages = RG_SHADER_STAGE_ALL_GRAPHICS;
+                        entries[b].shader_stages |= module->stage;
                     }
                 }
             }
@@ -408,7 +410,8 @@ PipelineAsset *PipelineAssetCreateGraphics(
 
 void PipelineAssetDestroy(PipelineAsset *pipeline_asset)
 {
-    RgDevice *device = PlatformGetDevice(pipeline_asset->platform);
+    Platform *platform = EngineGetPlatform(pipeline_asset->engine);
+    RgDevice *device = PlatformGetDevice(platform);
 
     for (uint32_t i = 0; i < pipeline_asset->set_layout_count; ++i)
     {
@@ -440,6 +443,8 @@ static void AnalyzeSpirv(
     size_t code_size,
     ModuleInfo *module)
 {
+    memset(module, 0, sizeof(*module));
+
     assert(code[0] == SpvMagicNumber);
 
     module->stage = stage;
@@ -547,8 +552,6 @@ static void AnalyzeSpirv(
 
         inst += word_count;
     }
-
-    memset(module, 0, sizeof(*module));
 
     for (Id *id = ids; id != ids + id_bound; ++id)
     {

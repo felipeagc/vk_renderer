@@ -3,13 +3,14 @@
 #include <assert.h>
 #include <string.h>
 #include <rg.h>
-#include "platform.h"
 #include "allocator.h"
+#include "platform.h"
+#include "engine.h"
 
 struct UniformArena
 {
-    Platform *platform;
     Allocator *allocator;
+    Engine *engine;
     RgBuffer *buffer;
     uint8_t *mapping;
     size_t size;
@@ -23,16 +24,18 @@ static inline size_t alignTo(size_t n, size_t to)
     return (rest != 0) ? (n + to - rest) : n;
 }
 
-UniformArena *UniformArenaCreate(Platform *platform, Allocator *allocator)
+UniformArena *UniformArenaCreate(Allocator *allocator, Engine *engine)
 {
     UniformArena *arena =
         (UniformArena*)Allocate(allocator, sizeof(UniformArena));
     *arena = {};
 
-    arena->platform = platform;
     arena->allocator = allocator;
+    arena->engine = engine;
 
-    RgDevice *device = PlatformGetDevice(arena->platform);
+    Platform *platform = EngineGetPlatform(engine);
+
+    RgDevice *device = PlatformGetDevice(platform);
     RgLimits limits;
     rgDeviceGetLimits(device, &limits);
 
@@ -52,7 +55,9 @@ UniformArena *UniformArenaCreate(Platform *platform, Allocator *allocator)
 
 void UniformArenaDestroy(UniformArena *arena)
 {
-    RgDevice *device = PlatformGetDevice(arena->platform);
+    Platform *platform = EngineGetPlatform(arena->engine);
+
+    RgDevice *device = PlatformGetDevice(platform);
     rgBufferUnmap(device, arena->buffer);
     rgBufferDestroy(device, arena->buffer);
     Free(arena->allocator, arena);

@@ -2,23 +2,26 @@
 
 #include "allocator.h"
 #include "platform.h"
+#include "engine.h"
 #include "array.h"
 
 struct Mesh
 {
     Allocator *allocator;
-    Platform *platform;
+    Engine *engine;
     RgBuffer *vertex_buffer;
     RgBuffer *index_buffer;
     uint32_t index_count;
 };
 
-Mesh *MeshCreateCube(Platform *platform, RgCmdPool *cmd_pool, Allocator *allocator)
+Mesh *MeshCreateCube(Allocator *allocator, Engine *engine, RgCmdPool *cmd_pool)
 {
     Mesh *mesh = (Mesh*)Allocate(allocator, sizeof(Mesh));
     *mesh = {};
     mesh->allocator = allocator;
-    mesh->platform = platform;
+    mesh->engine = engine;
+
+    Platform *platform = EngineGetPlatform(engine);
 
     Vertex vertices[8] = {
         {V3( 0.5, 0.5,  0.5), {}, {}, {}},
@@ -76,16 +79,18 @@ Mesh *MeshCreateCube(Platform *platform, RgCmdPool *cmd_pool, Allocator *allocat
 }
 
 Mesh *MeshCreateUVSphere(
-        Platform *platform,
-        RgCmdPool *cmd_pool,
         Allocator *allocator,
+        Engine *engine,
+        RgCmdPool *cmd_pool,
         float radius,
         uint32_t divisions)
 {
     Mesh *mesh = (Mesh*)Allocate(allocator, sizeof(Mesh));
     *mesh = {};
     mesh->allocator = allocator;
-    mesh->platform = platform;
+    mesh->engine = engine;
+
+    Platform *platform = EngineGetPlatform(engine);
 
     Array<Vertex> vertices = Array<Vertex>::with_allocator(allocator);
     Array<uint32_t> indices = Array<uint32_t>::with_allocator(allocator);
@@ -211,7 +216,8 @@ Mesh *MeshCreateUVSphere(
 
 void MeshDestroy(Mesh *mesh)
 {
-    RgDevice *device = PlatformGetDevice(mesh->platform);
+    Platform *platform = EngineGetPlatform(mesh->engine);
+    RgDevice *device = PlatformGetDevice(platform);
 
     rgBufferDestroy(device, mesh->vertex_buffer);
     rgBufferDestroy(device, mesh->index_buffer);

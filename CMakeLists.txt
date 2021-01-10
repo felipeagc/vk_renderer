@@ -11,21 +11,21 @@ add_library(
 	renderer/allocator.h
 	renderer/allocator.c
 
+	renderer/engine.h
+	renderer/engine.cpp
 	renderer/camera.h
 	renderer/camera.cpp
 	renderer/mesh.h
 	renderer/mesh.cpp
 	renderer/uniform_arena.h
 	renderer/uniform_arena.cpp
-	renderer/model.h
-	renderer/model.cpp
+	renderer/model_asset.h
+	renderer/model_asset.cpp
 	renderer/pipeline_asset.h
 	renderer/pipeline_asset.cpp
 
 	thirdparty/rg/rg.h
 	thirdparty/rg/rg.c
-	#thirdparty/rg/rg_ext.h
-	#thirdparty/rg/rg_ext.c
 	thirdparty/rg/volk.h
 	thirdparty/rg/volk.c
 

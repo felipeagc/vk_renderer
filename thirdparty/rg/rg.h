@@ -263,9 +263,9 @@ typedef enum RgShaderStage
 {
     RG_SHADER_STAGE_FRAGMENT     = 1 << 0,
     RG_SHADER_STAGE_VERTEX       = 1 << 1,
-    RG_SHADER_STAGE_ALL_GRAPHICS = 1 << 2,
-    RG_SHADER_STAGE_COMPUTE      = 1 << 3,
-    RG_SHADER_STAGE_ALL          = 1 << 4,
+    RG_SHADER_STAGE_COMPUTE      = 1 << 2,
+    RG_SHADER_STAGE_ALL_GRAPHICS = RG_SHADER_STAGE_FRAGMENT | RG_SHADER_STAGE_VERTEX,
+    RG_SHADER_STAGE_ALL          = 0x7FFFFFFF,
 } RgShaderStage;
 
 typedef struct RgDescriptorSetLayoutEntry

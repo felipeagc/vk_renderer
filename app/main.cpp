@@ -1,16 +1,18 @@
 #include <stdio.h>
 #include <assert.h>
 #include <renderer/platform.h>
+#include <renderer/engine.h>
 #include <renderer/camera.h>
 #include <renderer/math.h>
 #include <renderer/mesh.h>
 #include <renderer/allocator.h>
 #include <renderer/uniform_arena.h>
 #include <renderer/pipeline_asset.h>
+#include <renderer/model_asset.h>
 
 struct App
 {
-    Platform *platform;
+    Engine *engine;
     RgImage *offscreen_image;
     RgImage *offscreen_depth_image;
     RgRenderPass *offscreen_pass;
@@ -28,11 +30,11 @@ struct App
     PipelineAsset *backbuffer_pipeline;
 
     RgDescriptorSet *camera_set;
-
     RgDescriptorSet *descriptor_set;
 
     UniformArena *uniform_arena;
     FPSCamera camera;
+    ModelAsset *model_asset;
     Mesh *cube_mesh;
 };
 
@@ -46,9 +48,10 @@ App *AppCreate()
 {
     App *app = new App();
 
-    app->platform = PlatformCreate("App");
+    app->engine = EngineCreate(NULL);
 
-    RgDevice *device = PlatformGetDevice(app->platform);
+    Platform *platform = EngineGetPlatform(app->engine);
+    RgDevice *device = PlatformGetDevice(platform);
 
     //
     // Create sampler
@@ -71,10 +74,10 @@ App *AppCreate()
     {
         size_t hlsl_size = 0;
         const char *hlsl = (const char*)
-            PlatformLoadFileRelative(app->platform, "../shaders/color.hlsl", &hlsl_size);
+            EngineLoadFileRelative(app->engine, "../shaders/color.hlsl", &hlsl_size);
         assert(hlsl);
         app->offscreen_pipeline = PipelineAssetCreateGraphics(
-                NULL, app->platform, hlsl, hlsl_size);
+                NULL, app->engine, hlsl, hlsl_size);
         delete[] hlsl;
     }
 
@@ -84,10 +87,10 @@ App *AppCreate()
     {
         size_t hlsl_size = 0;
         const char *hlsl = (const char*)
-            PlatformLoadFileRelative(app->platform, "../shaders/post.hlsl", &hlsl_size);
+            EngineLoadFileRelative(app->engine, "../shaders/post.hlsl", &hlsl_size);
         assert(hlsl);
         app->backbuffer_pipeline = PipelineAssetCreateGraphics(
-                NULL, app->platform, hlsl, hlsl_size);
+                NULL, app->engine, hlsl, hlsl_size);
         delete[] hlsl;
     }
 
@@ -95,11 +98,14 @@ App *AppCreate()
     app->cmd_buffers[0] = rgCmdBufferCreate(device, app->cmd_pool);
     app->cmd_buffers[1] = rgCmdBufferCreate(device, app->cmd_pool);
 
-    FPSCameraInit(&app->camera, app->platform);
+    FPSCameraInit(&app->camera, app->engine);
 
-    app->uniform_arena = UniformArenaCreate(app->platform, NULL);
-    app->cube_mesh = MeshCreateUVSphere(app->platform, app->cmd_pool, NULL, 1.0f, 16);
-    app->last_time = PlatformGetTime(app->platform);
+    app->uniform_arena = UniformArenaCreate(NULL, app->engine);
+    app->cube_mesh = MeshCreateUVSphere(NULL, app->engine, app->cmd_pool, 1.0f, 16);
+    app->last_time = PlatformGetTime(platform);
+
+    app->model_asset = 
+        ModelAssetFromMesh(NULL, app->engine, app->uniform_arena, app->cube_mesh);
 
     AppResize(app);
 
@@ -108,10 +114,12 @@ App *AppCreate()
 
 void AppDestroy(App *app)
 {
-    RgDevice *device = PlatformGetDevice(app->platform);
+    Platform *platform = EngineGetPlatform(app->engine);
+    RgDevice *device = PlatformGetDevice(platform);
 
-    UniformArenaDestroy(app->uniform_arena);
+    ModelAssetDestroy(app->model_asset);
     MeshDestroy(app->cube_mesh);
+    UniformArenaDestroy(app->uniform_arena);
 
     rgDescriptorSetDestroy(device, app->camera_set);
     rgDescriptorSetDestroy(device, app->descriptor_set);
@@ -129,17 +137,18 @@ void AppDestroy(App *app)
     rgCmdBufferDestroy(device, app->cmd_pool, app->cmd_buffers[1]);
     rgCmdPoolDestroy(device, app->cmd_pool);
 
-    PlatformDestroy(app->platform);
+    EngineDestroy(app->engine);
 
     delete app;
 }
 
 void AppResize(App *app)
 {
-    uint32_t width, height;
-    PlatformGetWindowSize(app->platform, &width, &height);
+    Platform *platform = EngineGetPlatform(app->engine);
+    RgDevice *device = PlatformGetDevice(platform);
 
-    RgDevice *device = PlatformGetDevice(app->platform);
+    uint32_t width, height;
+    PlatformGetWindowSize(platform, &width, &height);
 
     if (app->offscreen_pass)
     {
@@ -191,12 +200,12 @@ void AppResize(App *app)
             app->camera_set = NULL;
         }
 
-        RgDescriptorSetEntry entries[] = {
-            { .binding = 0, .buffer = UniformArenaGetBuffer(app->uniform_arena) }
-        };
+        RgDescriptorSetEntry entries[1] = {};
+        entries[0].binding = 0;
+        entries[0].buffer = UniformArenaGetBuffer(app->uniform_arena);
 
         RgDescriptorSetInfo info = {
-            PipelineAssetGetSetLayout(app->offscreen_pipeline, 0), // layout
+            EngineGetSetLayout(app->engine, BIND_GROUP_CAMERA), // layout
             entries, // entries
             sizeof(entries) / sizeof(entries[0]), // entry_count
         };
@@ -211,10 +220,12 @@ void AppResize(App *app)
             app->descriptor_set = NULL;
         }
 
-        RgDescriptorSetEntry entries[] = {
-            { .binding = 0, .image = app->offscreen_image },
-            { .binding = 1, .sampler = app->sampler },
-        };
+        RgDescriptorSetEntry entries[2] = {};
+        entries[0].binding = 0;
+        entries[0].image = app->offscreen_image;
+
+        entries[1].binding = 1;
+        entries[1].sampler = app->sampler;
 
         RgDescriptorSetInfo info = {
             PipelineAssetGetSetLayout(app->backbuffer_pipeline, 0), // layout
@@ -228,9 +239,11 @@ void AppResize(App *app)
 
 void AppRenderFrame(App *app)
 {
+    Platform *platform = EngineGetPlatform(app->engine);
+
     CameraUniform camera_uniform = FPSCameraUpdate(&app->camera, app->delta_time);
 
-    RgSwapchain *swapchain = PlatformGetSwapchain(app->platform);
+    RgSwapchain *swapchain = PlatformGetSwapchain(platform);
     RgCmdBuffer *cmd_buffer = app->cmd_buffers[app->current_frame];
     RgRenderPass *offscreen_pass = app->offscreen_pass;
     RgRenderPass *backbuffer_pass = rgSwapchainGetRenderPass(swapchain);
@@ -248,16 +261,19 @@ void AppRenderFrame(App *app)
 
     rgCmdBindPipeline(cmd_buffer, PipelineAssetGetPipeline(app->offscreen_pipeline));
     uint32_t uniform_offset;
-    void *uniform_ptr = UniformArenaUse(app->uniform_arena, &uniform_offset, sizeof(camera_uniform));
+    void *uniform_ptr =
+        UniformArenaUse(app->uniform_arena, &uniform_offset, sizeof(camera_uniform));
     memcpy(uniform_ptr, &camera_uniform, sizeof(camera_uniform));
     rgCmdBindDescriptorSet(cmd_buffer, 0, app->camera_set, 1, &uniform_offset);
 
-    rgCmdBindVertexBuffer(
-            cmd_buffer, MeshGetVertexBuffer(app->cube_mesh), 0);
-    rgCmdBindIndexBuffer(
-            cmd_buffer, MeshGetIndexBuffer(app->cube_mesh), 0, RG_INDEX_TYPE_UINT32);
+    Mat4 transform = Mat4Diagonal(1.0f);
+    ModelAssetRender(app->model_asset, cmd_buffer, &transform);
+    /* rgCmdBindVertexBuffer( */
+    /*         cmd_buffer, MeshGetVertexBuffer(app->cube_mesh), 0); */
+    /* rgCmdBindIndexBuffer( */
+    /*         cmd_buffer, MeshGetIndexBuffer(app->cube_mesh), 0, RG_INDEX_TYPE_UINT32); */
 
-    rgCmdDrawIndexed(cmd_buffer, MeshGetIndexCount(app->cube_mesh), 1, 0, 0, 0);
+    /* rgCmdDrawIndexed(cmd_buffer, MeshGetIndexCount(app->cube_mesh), 1, 0, 0, 0); */
 
     // Backbuffer pass
 
@@ -287,16 +303,18 @@ void AppRenderFrame(App *app)
 
 void AppRun(App *app)
 {
-    while (!PlatformShouldClose(app->platform))
-    {
-        PlatformPollEvents(app->platform);
+    Platform *platform = EngineGetPlatform(app->engine);
 
-        double now = PlatformGetTime(app->platform);
+    while (!PlatformShouldClose(platform))
+    {
+        PlatformPollEvents(platform);
+
+        double now = PlatformGetTime(platform);
         app->delta_time = now - app->last_time;
         app->last_time = now;
 
         Event event = {};
-        while (PlatformNextEvent(app->platform, &event))
+        while (PlatformNextEvent(platform, &event))
         {
             switch (event.type)
             {
@@ -310,8 +328,8 @@ void AppRun(App *app)
                 if (event.keyboard.key == KEY_ESCAPE)
                 {
                     PlatformSetCursorEnabled(
-                            app->platform,
-                            !PlatformGetCursorEnabled(app->platform));
+                            platform,
+                            !PlatformGetCursorEnabled(platform));
                 }
                 break;
             }

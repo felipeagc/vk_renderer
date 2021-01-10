@@ -4,23 +4,23 @@
 #include <stddef.h>
 
 typedef struct Allocator Allocator;
-typedef struct Platform Platform;
+typedef struct Engine Engine;
 typedef union Mat4 Mat4;
 typedef struct Mesh Mesh;
-typedef struct Model Model;
+typedef struct ModelAsset ModelAsset;
 typedef struct RgCmdBuffer RgCmdBuffer;
 typedef struct UniformArena UniformArena;
 
-Model *ModelFromGltf(
+ModelAsset *ModelAssetFromGltf(
         Allocator *allocator,
-        Platform *platform,
+        Engine *engine,
         UniformArena *uniform_arena,
         const uint8_t *data,
         size_t size);
-Model *ModelFromMesh(
+ModelAsset *ModelAssetFromMesh(
         Allocator *allocator,
-        Platform *platform,
+        Engine *engine,
         UniformArena *uniform_arena,
         Mesh *mesh);
-void ModelDestroy(Model *model);
-void ModelRender(Model *model, RgCmdBuffer *cmd_buffer, Mat4 *transform);
+void ModelAssetDestroy(ModelAsset *model);
+void ModelAssetRender(ModelAsset *model, RgCmdBuffer *cmd_buffer, Mat4 *transform);

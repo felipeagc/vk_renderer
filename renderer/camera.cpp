@@ -1,9 +1,12 @@
 #include "camera.h"
 
-void FPSCameraInit(FPSCamera *camera, Platform *platform)
+#include "platform.h"
+#include "engine.h"
+
+void FPSCameraInit(FPSCamera *camera, Engine *engine)
 {
     *camera = {};
-    camera->platform = platform;
+    camera->engine = engine;
     camera->pos = V3(0.0f, 0.0f, 0.0f);
     camera->yaw = 0.0f;
     camera->pitch = 0.0f;
@@ -16,10 +19,12 @@ void FPSCameraInit(FPSCamera *camera, Platform *platform)
 
 CameraUniform FPSCameraUpdate(FPSCamera *camera, float delta_time)
 {
-    if (!PlatformGetCursorEnabled(camera->platform))
+    Platform *platform = EngineGetPlatform(camera->engine);
+
+    if (!PlatformGetCursorEnabled(platform))
     {
         double cx, cy;
-        PlatformGetCursorPos(camera->platform, &cx, &cy);
+        PlatformGetCursorPos(platform, &cx, &cy);
 
         float dx = (float)(cx - camera->prev_x);
         float dy = (float)(cy - camera->prev_y);
@@ -42,25 +47,25 @@ CameraUniform FPSCameraUpdate(FPSCamera *camera, float delta_time)
     Vec3 up = cross(right, front);
 
     float delta = camera->speed * delta_time;
-    if (PlatformGetKeyState(camera->platform, KEY_W))
+    if (PlatformGetKeyState(platform, KEY_W))
     {
         camera->pos = camera->pos + (front * delta);
     }
-    if (PlatformGetKeyState(camera->platform, KEY_S))
+    if (PlatformGetKeyState(platform, KEY_S))
     {
         camera->pos = camera->pos - (front * delta);
     }
-    if (PlatformGetKeyState(camera->platform, KEY_A))
+    if (PlatformGetKeyState(platform, KEY_A))
     {
         camera->pos = camera->pos - (right * delta);
     }
-    if (PlatformGetKeyState(camera->platform, KEY_D))
+    if (PlatformGetKeyState(platform, KEY_D))
     {
         camera->pos = camera->pos + (right * delta);
     }
 
     uint32_t width, height;
-    PlatformGetWindowSize(camera->platform, &width, &height);
+    PlatformGetWindowSize(platform, &width, &height);
 
     float aspect_ratio = (float)width / (float)height;
     Mat4 proj = Mat4PerspectiveReverseZ(camera->fovy, aspect_ratio, 0.1f);

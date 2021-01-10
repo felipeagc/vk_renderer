@@ -1,4 +1,4 @@
-#include "model.h"
+#include "model_asset.h"
 
 #include <assert.h>
 #include <rg.h>
@@ -6,11 +6,12 @@
 #include "array.h"
 #include "allocator.h"
 #include "platform.h"
+#include "engine.h"
 #include "mesh.h"
+#include "uniform_arena.h"
 
-struct ModelUniform
+struct MaterialUniform
 {
-    Mat4 transform;
     Vec4 base_color;
     Vec4 emissive;
     float metallic;
@@ -26,11 +27,7 @@ enum ModelType
 
 struct Material
 {
-    Vec4 base_color;
-    Vec4 emissive;
-    float metallic;
-    float roughness;
-    uint32_t is_normal_mapped;
+    MaterialUniform uniform;
 
     RgImage *albedo_image;
     RgSampler *albedo_sampler;
@@ -78,9 +75,9 @@ struct Node
     Quat rotation = {0.0, 0.0, 0.0, 1.0};
 };
 
-struct Model
+struct ModelAsset
 {
-    Platform *platform;
+    Engine *engine;
     Allocator *allocator;
     UniformArena *uniform_arena;
 
@@ -97,12 +94,12 @@ struct Model
     Array<RgSampler*> samplers;
 };
 
-static Material MaterialDefault(Platform *platform)
+static Material MaterialDefault(Engine *engine)
 {
     Material material = {};
-    RgImage *white_image = PlatformGetWhiteImage(platform);
-    RgImage *black_image = PlatformGetBlackImage(platform);
-    RgSampler *default_sampler = PlatformGetDefaultSampler(platform);
+    RgImage *white_image = EngineGetWhiteImage(engine);
+    RgImage *black_image = EngineGetBlackImage(engine);
+    RgSampler *default_sampler = EngineGetDefaultSampler(engine);
 
     material.albedo_image = white_image;
     material.normal_image = white_image;
@@ -118,18 +115,18 @@ static Material MaterialDefault(Platform *platform)
     return material;
 }
 
-Model *ModelFromGltf(
+ModelAsset *ModelAssetFromGltf(
         Allocator *allocator,
-        Platform *platform,
+        Engine *engine,
         UniformArena *uniform_arena,
         const uint8_t *data,
         size_t size)
 {
-    Model *model = (Model*)Allocate(allocator, sizeof(Model));
+    ModelAsset *model = (ModelAsset*)Allocate(allocator, sizeof(ModelAsset));
     *model = {};
 
     model->allocator = allocator;
-    model->platform = platform;
+    model->engine = engine;
     model->uniform_arena = uniform_arena;
     model->type = MODEL_FROM_GLTF;
 
@@ -140,17 +137,20 @@ Model *ModelFromGltf(
     return model;
 }
 
-Model *ModelFromMesh(
+ModelAsset *ModelAssetFromMesh(
         Allocator *allocator,
-        Platform *platform,
+        Engine *engine,
         UniformArena *uniform_arena,
         Mesh *mesh)
 {
-    Model *model = (Model*)Allocate(allocator, sizeof(Model));
+    ModelAsset *model = (ModelAsset*)Allocate(allocator, sizeof(ModelAsset));
     *model = {};
 
+    Platform *platform = EngineGetPlatform(engine);
+    RgDevice *device = PlatformGetDevice(platform);
+
     model->allocator = allocator;
-    model->platform = platform;
+    model->engine = engine;
     model->uniform_arena = uniform_arena;
     model->type = MODEL_FROM_MESH;
 
@@ -164,7 +164,7 @@ Model *ModelFromMesh(
     model->images = Array<RgImage*>::with_allocator(allocator);
     model->samplers = Array<RgSampler*>::with_allocator(allocator);
 
-    model->materials.push_back(MaterialDefault(platform));
+    model->materials.push_back(MaterialDefault(engine));
 
     Primitive primitive = {};
     primitive.first_index = 0;
@@ -194,17 +194,50 @@ Model *ModelFromMesh(
         }
     }
 
-    /* for (Material &material : model->materials) */
-    /* { */
-    /*     material.descriptor_set = rgPipelineCreateDescriptorSet(); */
-    /* } */
+    RgDescriptorSetLayout *material_set_layout =
+        EngineGetSetLayout(engine, BIND_GROUP_MODEL);
+
+    for (Material &material : model->materials)
+    {
+        RgDescriptorSetEntry entries[8] = {};
+        entries[0].binding = 0;
+        entries[0].buffer = UniformArenaGetBuffer(uniform_arena);
+
+        entries[1].binding = 1;
+        entries[1].buffer = UniformArenaGetBuffer(uniform_arena);
+
+        entries[2].binding = 2;
+        entries[2].sampler = material.albedo_sampler;
+
+        entries[3].binding = 3;
+        entries[3].image = material.albedo_image;
+
+        entries[4].binding = 4;
+        entries[4].image = material.normal_image;
+
+        entries[5].binding = 5;
+        entries[5].image = material.metallic_roughness_image;
+
+        entries[6].binding = 6;
+        entries[6].image = material.occlusion_image;
+
+        entries[7].binding = 7;
+        entries[7].image = material.emissive_image;
+
+        RgDescriptorSetInfo info = {};
+        info.layout = material_set_layout;
+        info.entries = entries;
+        info.entry_count = sizeof(entries)/sizeof(entries[0]);
+        material.descriptor_set = rgDescriptorSetCreate(device, &info);
+    }
 
     return model;
 }
 
-void ModelDestroy(Model *model)
+void ModelAssetDestroy(ModelAsset *model)
 {
-    RgDevice *device = PlatformGetDevice(model->platform);
+    Platform *platform = EngineGetPlatform(model->engine);
+    RgDevice *device = PlatformGetDevice(platform);
 
     switch (model->type)
     {
@@ -218,6 +251,11 @@ void ModelDestroy(Model *model)
         rgBufferDestroy(device, model->index_buffer);
         break;
     }
+    }
+
+    for (Material &material : model->materials)
+    {
+        rgDescriptorSetDestroy(device, material.descriptor_set);
     }
 
     for (Node &node : model->nodes)
@@ -241,14 +279,13 @@ void ModelDestroy(Model *model)
 }
 
 static void NodeRender(
-        Model *model,
+        ModelAsset *model,
         Node *node,
         RgCmdBuffer *cmd_buffer,
         Mat4 *transform)
 {
     (void)node;
     (void)cmd_buffer;
-    (void)transform;
 
     if (node->mesh_index != -1)
     {
@@ -258,17 +295,23 @@ static void NodeRender(
         {
             Material *material = &model->materials[primitive.material_index];
 
-            ModelUniform uniform = {};
-            uniform.transform = node->matrix;
-            if (transform)
-            {
-                uniform.transform = (*transform) * node->matrix;
-            }
-            uniform.base_color = material->base_color;
-            uniform.emissive = material->emissive;
-            uniform.metallic = material->metallic;
-            uniform.roughness = material->roughness;
-            uniform.is_normal_mapped = material->is_normal_mapped;
+            uint32_t model_offset = 0;
+            void *model_buffer = UniformArenaUse(
+                    model->uniform_arena, &model_offset, sizeof(Mat4));
+            memcpy(model_buffer, transform, sizeof(Mat4));
+
+            uint32_t material_offset = 0;
+            void *material_buffer = UniformArenaUse(
+                    model->uniform_arena, &material_offset, sizeof(MaterialUniform));
+            memcpy(material_buffer, &material->uniform, sizeof(MaterialUniform));
+
+            uint32_t dynamic_offsets[] = {
+                model_offset,
+                material_offset,
+            };
+
+            rgCmdBindDescriptorSet(
+                    cmd_buffer, 1, material->descriptor_set, 2, dynamic_offsets);
 
             if (primitive.has_indices)
             {
@@ -289,8 +332,9 @@ static void NodeRender(
     }
 }
 
-void ModelRender(Model *model, RgCmdBuffer *cmd_buffer, Mat4 *transform)
+void ModelAssetRender(ModelAsset *model, RgCmdBuffer *cmd_buffer, Mat4 *transform)
 {
+    assert(transform);
     rgCmdBindVertexBuffer(cmd_buffer, model->vertex_buffer, 0);
     rgCmdBindIndexBuffer(cmd_buffer, model->index_buffer, 0, RG_INDEX_TYPE_UINT32);
     for (Node &node : model->nodes)

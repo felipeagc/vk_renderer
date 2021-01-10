@@ -6,11 +6,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <assert.h>
-
-#ifdef __linux__
-#include <unistd.h>
-#include <linux/limits.h>
-#endif
+#include "allocator.h"
 
 #ifdef _WIN32
 #define GLFW_EXPOSE_NATIVE_WIN32
@@ -50,42 +46,12 @@ static void eventQueueWindowMaximizeCallback(GLFWwindow* window, int maximized);
 static void eventQueueWindowContentScaleCallback(GLFWwindow* window, float xscale, float yscale);
 static void eventFree(Event* event);
 
-static const char *getExeDirPath()
-{
-#ifdef __linux__
-    char buf[PATH_MAX];
-    size_t buf_size = readlink("/proc/self/exe", buf, sizeof(buf));
-
-    char *path = new char[buf_size+1];
-    memcpy(path, buf, buf_size);
-    path[buf_size] = '\0';
-
-    size_t last_slash_pos = 0;
-    for (size_t i = 0; i < buf_size; ++i)
-    {
-        if (path[i] == '/')
-        {
-            last_slash_pos = i;
-        }
-    }
-
-    path[last_slash_pos] = '\0';
-
-    return path;
-#endif
-}
-
 struct Platform
 {
+    Allocator *allocator;
     GLFWwindow *window;
     RgDevice *device;
     RgSwapchain *swapchain;
-    const char *exe_dir;
-
-    RgCmdPool *transfer_cmd_pool;
-    RgImage *white_image;
-    RgImage *black_image;
-    RgSampler *default_sampler;
 };
 
 void PlatformResizeResources(Platform *platform)
@@ -117,10 +83,12 @@ void PlatformResizeResources(Platform *platform)
     }
 }
 
-Platform *PlatformCreate(const char *window_title)
+Platform *PlatformCreate(Allocator *allocator, const char *window_title)
 {
-    Platform *platform = new Platform();
-    platform->exe_dir = getExeDirPath();
+    Platform *platform = (Platform*)Allocate(allocator, sizeof(Platform));
+    *platform = {};
+
+    platform->allocator = allocator;
 
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -154,76 +122,18 @@ Platform *PlatformCreate(const char *window_title)
 
     PlatformResizeResources(platform);
 
-    platform->transfer_cmd_pool = rgCmdPoolCreate(platform->device, RG_QUEUE_TYPE_TRANSFER);
-
-    RgImageInfo image_info = {};
-    image_info.extent = {1, 1, 1};
-    image_info.format = RG_FORMAT_RGBA8_UNORM;
-    image_info.usage = RG_IMAGE_USAGE_SAMPLED | RG_IMAGE_USAGE_TRANSFER_DST;
-    image_info.aspect = RG_IMAGE_ASPECT_COLOR;
-    image_info.sample_count = 1;
-    image_info.mip_count = 1;
-    image_info.layer_count = 1;
-
-    platform->white_image = rgImageCreate(platform->device, &image_info);
-    platform->black_image = rgImageCreate(platform->device, &image_info);
-
-    uint8_t white_data[] = {0, 0, 0, 255};
-    uint8_t black_data[] = {0, 0, 0, 255};
-
-    RgImageCopy image_copy = {};
-    RgExtent3D extent = {1, 1, 1};
-
-    image_copy.image = platform->white_image;
-    rgImageUpload(
-            platform->device,
-            platform->transfer_cmd_pool,
-            &image_copy,
-            &extent,
-            sizeof(white_data),
-            white_data);
-
-    image_copy.image = platform->black_image;
-    rgImageUpload(
-            platform->device,
-            platform->transfer_cmd_pool,
-            &image_copy,
-            &extent,
-            sizeof(black_data),
-            black_data);
-
-    RgSamplerInfo sampler_info = {};
-    sampler_info.anisotropy = true;
-    sampler_info.max_anisotropy = 16.0f;
-    sampler_info.min_filter = RG_FILTER_LINEAR;
-    sampler_info.mag_filter = RG_FILTER_LINEAR;
-    sampler_info.address_mode = RG_SAMPLER_ADDRESS_MODE_REPEAT;
-    sampler_info.border_color = RG_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
-    platform->default_sampler = rgSamplerCreate(platform->device, &sampler_info);
-
     return platform;
 }
 
 void PlatformDestroy(Platform *platform)
 {
-    rgImageDestroy(platform->device, platform->white_image);
-    rgImageDestroy(platform->device, platform->black_image);
-    rgSamplerDestroy(platform->device, platform->default_sampler);
-    rgCmdPoolDestroy(platform->device, platform->transfer_cmd_pool);
     rgSwapchainDestroy(platform->device, platform->swapchain);
     rgDeviceDestroy(platform->device);
 
     glfwDestroyWindow(platform->window);
     glfwTerminate();
 
-    delete[] platform->exe_dir;
-
-    delete platform;
-}
-
-const char *PlatformGetExeDir(Platform *platform)
-{
-    return platform->exe_dir;
+    Free(platform->allocator, platform);
 }
 
 RgDevice *PlatformGetDevice(Platform *platform)
@@ -317,45 +227,6 @@ bool PlatformNextEvent(Platform *platform, Event *event)
     }
 
     return event->type != EVENT_NONE;
-}
-
-uint8_t *PlatformLoadFileRelative(Platform *platform, const char *relative_path, size_t *size)
-{
-    size_t path_size = strlen(platform->exe_dir) + 1 + strlen(relative_path) + 1;
-    char *path = new char[path_size];
-    snprintf(path, path_size, "%s/%s", platform->exe_dir, relative_path);
-    path[path_size-1] = '\0';
-
-    FILE *f = fopen(path, "rb");
-    if (!f) return NULL;
-
-    fseek(f, 0, SEEK_END);
-    *size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    uint8_t *data = new uint8_t[*size];
-    fread(data, *size, 1, f);
-
-    fclose(f);
-
-    delete[] path;
-
-    return data;
-}
-
-RgImage *PlatformGetWhiteImage(Platform *platform)
-{
-    return platform->white_image;
-}
-
-RgImage *PlatformGetBlackImage(Platform *platform)
-{
-    return platform->black_image;
-}
-
-RgSampler *PlatformGetDefaultSampler(Platform *platform)
-{
-    return platform->default_sampler;
 }
 
 // Event queue {{{

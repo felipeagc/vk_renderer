@@ -744,14 +744,6 @@ static VkShaderStageFlags rgShaderStageToVk(RgShaderStage shader_stage)
     {
         vk_shader_stage |= VK_SHADER_STAGE_COMPUTE_BIT;
     }
-    if ((shader_stage & RG_SHADER_STAGE_ALL_GRAPHICS) == RG_SHADER_STAGE_ALL_GRAPHICS)
-    {
-        vk_shader_stage |= VK_SHADER_STAGE_ALL_GRAPHICS;
-    }
-    if ((shader_stage & RG_SHADER_STAGE_ALL) == RG_SHADER_STAGE_ALL)
-    {
-        vk_shader_stage |= VK_SHADER_STAGE_ALL;
-    }
     return vk_shader_stage;
 }
 

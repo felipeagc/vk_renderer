@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
+typedef struct Allocator Allocator;
 typedef struct RgDevice RgDevice;
 typedef struct RgSwapchain RgSwapchain;
 typedef struct RgImage RgImage;
@@ -231,10 +232,9 @@ enum Key
 
 struct Platform;
 
-Platform *PlatformCreate(const char *title);
+Platform *PlatformCreate(Allocator *allocator, const char *title);
 void PlatformDestroy(Platform *platform);
 
-const char *PlatformGetExeDir(Platform *platform);
 RgDevice *PlatformGetDevice(Platform *platform);
 RgSwapchain *PlatformGetSwapchain(Platform *platform);
 
@@ -249,10 +249,3 @@ bool PlatformGetButtonState(Platform *platform, Button button);
 bool PlatformShouldClose(Platform *platform);
 void PlatformPollEvents(Platform *platform);
 bool PlatformNextEvent(Platform *platform, Event *event);
-
-uint8_t *PlatformLoadFileRelative(
-        Platform *platform, const char *relative_path, size_t *size);
-
-RgImage *PlatformGetWhiteImage(Platform *platform);
-RgImage *PlatformGetBlackImage(Platform *platform);
-RgSampler *PlatformGetDefaultSampler(Platform *platform);

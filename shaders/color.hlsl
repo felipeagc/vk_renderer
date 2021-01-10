@@ -10,6 +10,10 @@ struct Camera
 struct Model
 {
 	float4x4 matrix;
+};
+
+struct Material
+{
 	float4 base_color;
 	float4 emissive;
 	float metallic;
@@ -32,7 +36,16 @@ struct VsOutput
 };
 
 [[vk::binding(0, 0)]] ConstantBuffer<Camera> camera;
+
 [[vk::binding(0, 1)]] ConstantBuffer<Model> model;
+[[vk::binding(1, 1)]] ConstantBuffer<Material> material;
+[[vk::binding(2, 1)]] SamplerState model_sampler;
+[[vk::binding(3, 1)]] Texture2D<float4> albedo_image;
+[[vk::binding(4, 1)]] Texture2D<float4> normal_image;
+[[vk::binding(5, 1)]] Texture2D<float4> metallic_roughness_image;
+[[vk::binding(6, 1)]] Texture2D<float4> occlusion_image;
+[[vk::binding(7, 1)]] Texture2D<float4> emissive_image;
+
 
 VsOutput vertex(in VsInput vs_in)
 {

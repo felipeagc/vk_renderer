@@ -3,7 +3,7 @@
 #include <rg.h>
 #include "math.h"
 
-typedef struct Platform Platform;
+typedef struct Engine Engine;
 typedef struct Mesh Mesh;
 typedef struct Allocator Allocator;
 
@@ -15,11 +15,11 @@ typedef struct Vertex
     Vec2 uv;
 } Vertex;
 
-Mesh *MeshCreateCube(Platform *platform, RgCmdPool *cmd_pool, Allocator *allocator);
+Mesh *MeshCreateCube(Allocator *allocator, Engine *engine, RgCmdPool *cmd_pool);
 Mesh *MeshCreateUVSphere(
-        Platform *platform,
-        RgCmdPool *cmd_pool,
         Allocator *allocator,
+        Engine *engine,
+        RgCmdPool *cmd_pool,
         float radius,
         uint32_t divisions);
 void MeshDestroy(Mesh *mesh);

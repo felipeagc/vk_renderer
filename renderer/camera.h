@@ -1,7 +1,8 @@
 #pragma once
 
 #include "math.h"
-#include "platform.h"
+
+typedef struct Engine Engine;
 
 struct CameraUniform
 {
@@ -12,7 +13,7 @@ struct CameraUniform
 
 struct FPSCamera
 {
-    Platform *platform;
+    Engine *engine;
 
     Vec3 pos;
     float yaw;
@@ -25,5 +26,5 @@ struct FPSCamera
     float speed;
 };
 
-void FPSCameraInit(FPSCamera *camera, Platform *platform);
+void FPSCameraInit(FPSCamera *camera, Engine *engine);
 CameraUniform FPSCameraUpdate(FPSCamera *camera, float delta_time);
