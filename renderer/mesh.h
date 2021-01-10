@@ -16,6 +16,12 @@ typedef struct Vertex
 } Vertex;
 
 Mesh *MeshCreateCube(Platform *platform, RgCmdPool *cmd_pool, Allocator *allocator);
+Mesh *MeshCreateUVSphere(
+        Platform *platform,
+        RgCmdPool *cmd_pool,
+        Allocator *allocator,
+        float radius,
+        uint32_t divisions);
 void MeshDestroy(Mesh *mesh);
 
 RgBuffer *MeshGetVertexBuffer(Mesh* mesh);

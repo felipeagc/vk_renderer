@@ -5,80 +5,8 @@
 #include <renderer/math.h>
 #include <renderer/mesh.h>
 #include <renderer/allocator.h>
-
-struct UniformBuffer
-{
-    Platform *platform;
-    Allocator *allocator;
-    RgBuffer *buffer;
-    uint8_t *mapping;
-    size_t size;
-    size_t offset;
-    size_t alignment;
-};
-
-static inline size_t alignTo(size_t n, size_t to)
-{
-    size_t rest = n % to;
-    return (rest != 0) ? (n + to - rest) : n;
-}
-
-UniformBuffer *UniformBufferCreate(Platform *platform, Allocator *allocator)
-{
-    UniformBuffer *uniform_buffer =
-        (UniformBuffer*)Allocate(allocator, sizeof(UniformBuffer));
-    *uniform_buffer = {};
-
-    uniform_buffer->platform = platform;
-    uniform_buffer->allocator = allocator;
-
-    RgDevice *device = PlatformGetDevice(uniform_buffer->platform);
-    RgLimits limits;
-    rgDeviceGetLimits(device, &limits);
-
-    uniform_buffer->size = 65536;
-    uniform_buffer->alignment = limits.min_uniform_buffer_offset_alignment;
-
-    RgBufferInfo buffer_info = {};
-    buffer_info.size = uniform_buffer->size;
-    buffer_info.usage = RG_BUFFER_USAGE_UNIFORM | RG_BUFFER_USAGE_TRANSFER_DST;
-    buffer_info.memory = RG_BUFFER_MEMORY_HOST;
-    uniform_buffer->buffer = rgBufferCreate(device, &buffer_info);
-
-    uniform_buffer->mapping = (uint8_t*)rgBufferMap(device, uniform_buffer->buffer);
-
-    return uniform_buffer;
-}
-
-void UniformBufferReset(UniformBuffer *uniform_buffer)
-{
-    uniform_buffer->offset = 0;
-}
-
-uint32_t UniformBufferUse(UniformBuffer *uniform_buffer, void *data, size_t size)
-{
-    uniform_buffer->offset = alignTo(uniform_buffer->offset, uniform_buffer->alignment);
-    size_t old_offset = uniform_buffer->offset;
-    uniform_buffer->offset += size;
-    assert(uniform_buffer->offset <= uniform_buffer->size);
-    memcpy(uniform_buffer->mapping + old_offset, data, size);
-    return (uint32_t)old_offset;
-}
-
-void UniformBufferGetDescriptor(UniformBuffer *uniform_buffer, RgDescriptor *descriptor)
-{
-    descriptor->buffer.buffer = uniform_buffer->buffer;
-    descriptor->buffer.offset = 0;
-    descriptor->buffer.range = 0;
-}
-
-void UniformBufferDestroy(UniformBuffer *uniform_buffer)
-{
-    RgDevice *device = PlatformGetDevice(uniform_buffer->platform);
-    rgBufferUnmap(device, uniform_buffer->buffer);
-    rgBufferDestroy(device, uniform_buffer->buffer);
-    Free(uniform_buffer->allocator, uniform_buffer);
-}
+#include <renderer/uniform_arena.h>
+#include <renderer/pipeline_asset.h>
 
 struct App
 {
@@ -96,14 +24,14 @@ struct App
 
     RgSampler *sampler;
 
-    RgPipeline *offscreen_pipeline;
-    RgPipeline *backbuffer_pipeline;
+    PipelineAsset *offscreen_pipeline;
+    PipelineAsset *backbuffer_pipeline;
 
     RgDescriptorSet *camera_set;
 
     RgDescriptorSet *descriptor_set;
 
-    UniformBuffer *uniform_buffer;
+    UniformArena *uniform_arena;
     FPSCamera camera;
     Mesh *cube_mesh;
 };
@@ -145,7 +73,8 @@ App *AppCreate()
         const char *hlsl = (const char*)
             PlatformLoadFileRelative(app->platform, "../shaders/color.hlsl", &hlsl_size);
         assert(hlsl);
-        app->offscreen_pipeline = PlatformCreatePipeline(app->platform, hlsl, hlsl_size);
+        app->offscreen_pipeline = PipelineAssetCreateGraphics(
+                NULL, app->platform, hlsl, hlsl_size);
         delete[] hlsl;
     }
 
@@ -157,30 +86,22 @@ App *AppCreate()
         const char *hlsl = (const char*)
             PlatformLoadFileRelative(app->platform, "../shaders/post.hlsl", &hlsl_size);
         assert(hlsl);
-        app->backbuffer_pipeline = PlatformCreatePipeline(app->platform, hlsl, hlsl_size);
+        app->backbuffer_pipeline = PipelineAssetCreateGraphics(
+                NULL, app->platform, hlsl, hlsl_size);
         delete[] hlsl;
     }
-
-    app->descriptor_set = rgPipelineCreateDescriptorSet(app->backbuffer_pipeline, 0);
-
-    app->camera_set = rgPipelineCreateDescriptorSet(app->offscreen_pipeline, 0);
 
     app->cmd_pool = rgCmdPoolCreate(device, RG_QUEUE_TYPE_GRAPHICS);
     app->cmd_buffers[0] = rgCmdBufferCreate(device, app->cmd_pool);
     app->cmd_buffers[1] = rgCmdBufferCreate(device, app->cmd_pool);
 
-    AppResize(app);
-
     FPSCameraInit(&app->camera, app->platform);
-    
-    app->uniform_buffer = UniformBufferCreate(app->platform, NULL);
-    RgDescriptor uniform_descriptor;
-    UniformBufferGetDescriptor(app->uniform_buffer, &uniform_descriptor);
-    rgUpdateDescriptorSet(app->camera_set, 1, &uniform_descriptor);
 
-    app->cube_mesh = MeshCreateCube(app->platform, app->cmd_pool, NULL);
-
+    app->uniform_arena = UniformArenaCreate(app->platform, NULL);
+    app->cube_mesh = MeshCreateUVSphere(app->platform, app->cmd_pool, NULL, 1.0f, 16);
     app->last_time = PlatformGetTime(app->platform);
+
+    AppResize(app);
 
     return app;
 }
@@ -189,14 +110,14 @@ void AppDestroy(App *app)
 {
     RgDevice *device = PlatformGetDevice(app->platform);
 
-    UniformBufferDestroy(app->uniform_buffer);
+    UniformArenaDestroy(app->uniform_arena);
     MeshDestroy(app->cube_mesh);
 
-    rgPipelineDestroyDescriptorSet(app->backbuffer_pipeline, app->descriptor_set);
-    rgPipelineDestroyDescriptorSet(app->offscreen_pipeline, app->camera_set);
+    rgDescriptorSetDestroy(device, app->camera_set);
+    rgDescriptorSetDestroy(device, app->descriptor_set);
 
-    rgPipelineDestroy(device, app->offscreen_pipeline);
-    rgPipelineDestroy(device, app->backbuffer_pipeline);
+    PipelineAssetDestroy(app->offscreen_pipeline);
+    PipelineAssetDestroy(app->backbuffer_pipeline);
 
     rgSamplerDestroy(device, app->sampler);
 
@@ -263,12 +184,46 @@ void AppResize(App *app)
     };
     app->offscreen_pass = rgRenderPassCreate(device, &render_pass_info);
 
-    RgDescriptor descriptors[] = {
-        { .image = {.image = app->offscreen_image} },
-        { .image = {.sampler = app->sampler} },
-    };
+    {
+        if (app->camera_set)
+        {
+            rgDescriptorSetDestroy(device, app->camera_set);
+            app->camera_set = NULL;
+        }
 
-    rgUpdateDescriptorSet(app->descriptor_set, 2, descriptors);
+        RgDescriptorSetEntry entries[] = {
+            { .binding = 0, .buffer = UniformArenaGetBuffer(app->uniform_arena) }
+        };
+
+        RgDescriptorSetInfo info = {
+            PipelineAssetGetSetLayout(app->offscreen_pipeline, 0), // layout
+            entries, // entries
+            sizeof(entries) / sizeof(entries[0]), // entry_count
+        };
+
+        app->camera_set = rgDescriptorSetCreate(device, &info);
+    }
+
+    {
+        if (app->descriptor_set)
+        {
+            rgDescriptorSetDestroy(device, app->descriptor_set);
+            app->descriptor_set = NULL;
+        }
+
+        RgDescriptorSetEntry entries[] = {
+            { .binding = 0, .image = app->offscreen_image },
+            { .binding = 1, .sampler = app->sampler },
+        };
+
+        RgDescriptorSetInfo info = {
+            PipelineAssetGetSetLayout(app->backbuffer_pipeline, 0), // layout
+            entries, // entries
+            sizeof(entries) / sizeof(entries[0]), // entry_count
+        };
+
+        app->descriptor_set = rgDescriptorSetCreate(device, &info);
+    }
 }
 
 void AppRenderFrame(App *app)
@@ -291,10 +246,11 @@ void AppRenderFrame(App *app)
     offscreen_clear_values[1].depth_stencil = { 0.0f, 0 };
     rgCmdSetRenderPass(cmd_buffer, offscreen_pass, 2, offscreen_clear_values);
 
-    rgCmdBindPipeline(cmd_buffer, app->offscreen_pipeline);
-    uint32_t uniform_offset =
-        UniformBufferUse(app->uniform_buffer, &camera_uniform, sizeof(camera_uniform));
-    rgCmdBindDescriptorSet(cmd_buffer, app->camera_set, 1, &uniform_offset);
+    rgCmdBindPipeline(cmd_buffer, PipelineAssetGetPipeline(app->offscreen_pipeline));
+    uint32_t uniform_offset;
+    void *uniform_ptr = UniformArenaUse(app->uniform_arena, &uniform_offset, sizeof(camera_uniform));
+    memcpy(uniform_ptr, &camera_uniform, sizeof(camera_uniform));
+    rgCmdBindDescriptorSet(cmd_buffer, 0, app->camera_set, 1, &uniform_offset);
 
     rgCmdBindVertexBuffer(
             cmd_buffer, MeshGetVertexBuffer(app->cube_mesh), 0);
@@ -309,8 +265,8 @@ void AppRenderFrame(App *app)
     backbuffer_clear_values[0].color = { { 0.0, 0.0, 0.0, 1.0 } };
     rgCmdSetRenderPass(cmd_buffer, backbuffer_pass, 1, backbuffer_clear_values);
 
-    rgCmdBindPipeline(cmd_buffer, app->backbuffer_pipeline);
-    rgCmdBindDescriptorSet(cmd_buffer, app->descriptor_set, 0, NULL);
+    rgCmdBindPipeline(cmd_buffer, PipelineAssetGetPipeline(app->backbuffer_pipeline));
+    rgCmdBindDescriptorSet(cmd_buffer, 0, app->descriptor_set, 0, NULL);
 
     rgCmdDraw(cmd_buffer, 3, 1, 0, 0);
 
@@ -325,7 +281,7 @@ void AppRenderFrame(App *app)
     app->current_frame = (app->current_frame + 1) % 2;
     if (app->current_frame == 0)
     {
-        UniformBufferReset(app->uniform_buffer);
+        UniformArenaReset(app->uniform_arena);
     }
 }
 

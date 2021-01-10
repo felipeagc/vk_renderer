@@ -1,7 +1,12 @@
 #pragma once
 
-#include <rg.h>
-#include <rg_ext.h>
+#include <stdint.h>
+#include <stddef.h>
+
+typedef struct RgDevice RgDevice;
+typedef struct RgSwapchain RgSwapchain;
+typedef struct RgImage RgImage;
+typedef struct RgSampler RgSampler;
 
 enum EventType
 {
@@ -247,5 +252,7 @@ bool PlatformNextEvent(Platform *platform, Event *event);
 
 uint8_t *PlatformLoadFileRelative(
         Platform *platform, const char *relative_path, size_t *size);
-RgPipeline *PlatformCreatePipeline(
-        Platform *platform, const char *hlsl, size_t hlsl_size);
+
+RgImage *PlatformGetWhiteImage(Platform *platform);
+RgImage *PlatformGetBlackImage(Platform *platform);
+RgSampler *PlatformGetDefaultSampler(Platform *platform);

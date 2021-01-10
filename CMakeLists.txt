@@ -6,19 +6,26 @@ add_library(
 
 	renderer/platform.h
 	renderer/platform.cpp
+	renderer/array.h
 	renderer/math.h
+	renderer/allocator.h
+	renderer/allocator.c
+
 	renderer/camera.h
 	renderer/camera.cpp
 	renderer/mesh.h
 	renderer/mesh.cpp
-
-	renderer/allocator.h
-	renderer/allocator.c
+	renderer/uniform_arena.h
+	renderer/uniform_arena.cpp
+	renderer/model.h
+	renderer/model.cpp
+	renderer/pipeline_asset.h
+	renderer/pipeline_asset.cpp
 
 	thirdparty/rg/rg.h
 	thirdparty/rg/rg.c
-	thirdparty/rg/rg_ext.h
-	thirdparty/rg/rg_ext.c
+	#thirdparty/rg/rg_ext.h
+	#thirdparty/rg/rg_ext.c
 	thirdparty/rg/volk.h
 	thirdparty/rg/volk.c
 

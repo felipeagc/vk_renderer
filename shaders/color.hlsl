@@ -1,3 +1,5 @@
+#pragma cull_mode back
+
 struct Camera
 {
 	float4 pos;
@@ -5,12 +7,22 @@ struct Camera
 	float4x4 proj;
 };
 
+struct Model
+{
+	float4x4 matrix;
+	float4 base_color;
+	float4 emissive;
+	float metallic;
+	float roughness;
+	uint is_normal_mapped;
+};
+
 struct VsInput
 {
-	float3 pos : POSITION;
-	float3 normal : NORMAL;
+	float3 pos     : POSITION;
+	float3 normal  : NORMAL;
 	float4 tangent : TANGENT;
-	float2 uv : TEXCOORD0;
+	float2 uv      : TEXCOORD0;
 };
 
 struct VsOutput
@@ -20,6 +32,7 @@ struct VsOutput
 };
 
 [[vk::binding(0, 0)]] ConstantBuffer<Camera> camera;
+[[vk::binding(0, 1)]] ConstantBuffer<Model> model;
 
 VsOutput vertex(in VsInput vs_in)
 {

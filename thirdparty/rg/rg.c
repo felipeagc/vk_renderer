@@ -20,7 +20,7 @@
 enum
 {
     RG_ARRAY_INITIAL_CAPACITY = 16,
-    RG_MAX_DESCRIPTOR_BINDINGS = 32,
+    RG_MAX_DESCRIPTOR_SET_BINDINGS = 32,
 };
 
 #define RG_ALIGN(n, to) (((n) % (to)) ? ((n) + ((to) - ((n) % (to)))) : (n))
@@ -272,14 +272,13 @@ struct RgImage
     VkImageView view;
 };
 
-typedef union RgDescriptorInternal
+typedef union RgDescriptor
 {
     VkDescriptorImageInfo image;
     VkDescriptorBufferInfo buffer;
-} RgDescriptorInternal;
+} RgDescriptor;
 
 typedef struct RgDescriptorSetPool RgDescriptorSetPool;
-typedef struct RgDescriptorSetAllocator RgDescriptorSetAllocator;
 
 struct RgDescriptorSet
 {
@@ -289,8 +288,7 @@ struct RgDescriptorSet
 
 struct RgDescriptorSetPool
 {
-    RgDescriptorSetAllocator *set_allocator;
-    uint32_t set_index;
+    RgDescriptorSetLayout *set_layout;
 
     VkDescriptorPool pool;
     RgDescriptorSet *sets;
@@ -298,13 +296,10 @@ struct RgDescriptorSetPool
     ARRAY_OF(RgDescriptorSet *) free_list;
 };
 
-struct RgDescriptorSetAllocator
+struct RgDescriptorSetLayout
 {
     RgDevice *device;
-    uint32_t set_index;
     VkDescriptorSetLayout set_layout;
-    VkDescriptorUpdateTemplate template;
-
     VkDescriptorSetLayoutBinding *bindings;
     uint32_t binding_count;
 
@@ -322,14 +317,7 @@ struct RgPipeline
     RgDevice *device;
     RgPipelineType type;
 
-    uint32_t num_bindings;
-    RgPipelineBinding *bindings;
-
-    uint32_t num_sets;
-    VkDescriptorSetLayout *set_layouts;
-    VkDescriptorUpdateTemplate *update_templates;
     VkPipelineLayout pipeline_layout;
-    RgDescriptorSetAllocator **set_allocators;
 
     union
     {
@@ -718,20 +706,53 @@ static VkPrimitiveTopology rgPrimitiveTopologyToVk(RgPrimitiveTopology value)
     return 0;
 }
 
-static VkDescriptorType rgPipelineBindingTypeToVk(RgPipelineBindingType type)
+static VkDescriptorType rgDescriptorTypeToVk(RgDescriptorType type)
 {
     switch (type)
     {
-    case RG_BINDING_UNIFORM_BUFFER: return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    case RG_BINDING_UNIFORM_BUFFER_DYNAMIC: return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-    case RG_BINDING_STORAGE_BUFFER: return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    case RG_BINDING_STORAGE_BUFFER_DYNAMIC: return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC;
-    case RG_BINDING_IMAGE: return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-    case RG_BINDING_SAMPLER: return VK_DESCRIPTOR_TYPE_SAMPLER;
-    case RG_BINDING_IMAGE_SAMPLER: return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    case RG_DESCRIPTOR_UNIFORM_BUFFER:
+        return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    case RG_DESCRIPTOR_UNIFORM_BUFFER_DYNAMIC:
+        return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+    case RG_DESCRIPTOR_STORAGE_BUFFER:
+        return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    case RG_DESCRIPTOR_STORAGE_BUFFER_DYNAMIC:
+        return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC;
+    case RG_DESCRIPTOR_IMAGE:
+        return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    case RG_DESCRIPTOR_SAMPLER:
+        return VK_DESCRIPTOR_TYPE_SAMPLER;
+    case RG_DESCRIPTOR_IMAGE_SAMPLER:
+        return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     }
     assert(0);
     return 0;
+}
+
+static VkShaderStageFlags rgShaderStageToVk(RgShaderStage shader_stage)
+{
+    VkShaderStageFlags vk_shader_stage = 0;
+    if ((shader_stage & RG_SHADER_STAGE_FRAGMENT) == RG_SHADER_STAGE_FRAGMENT)
+    {
+        vk_shader_stage |= VK_SHADER_STAGE_FRAGMENT_BIT;
+    }
+    if ((shader_stage & RG_SHADER_STAGE_VERTEX) == RG_SHADER_STAGE_VERTEX)
+    {
+        vk_shader_stage |= VK_SHADER_STAGE_VERTEX_BIT;
+    }
+    if ((shader_stage & RG_SHADER_STAGE_COMPUTE) == RG_SHADER_STAGE_COMPUTE)
+    {
+        vk_shader_stage |= VK_SHADER_STAGE_COMPUTE_BIT;
+    }
+    if ((shader_stage & RG_SHADER_STAGE_ALL_GRAPHICS) == RG_SHADER_STAGE_ALL_GRAPHICS)
+    {
+        vk_shader_stage |= VK_SHADER_STAGE_ALL_GRAPHICS;
+    }
+    if ((shader_stage & RG_SHADER_STAGE_ALL) == RG_SHADER_STAGE_ALL)
+    {
+        vk_shader_stage |= VK_SHADER_STAGE_ALL;
+    }
+    return vk_shader_stage;
 }
 
 static VkImageAspectFlags rgImageAspectToVk(RgImageAspect aspect)
@@ -3197,22 +3218,21 @@ void rgRenderPassDestroy(RgDevice *device, RgRenderPass *render_pass)
 }
 // }}}
 
-// Descriptor set allocator {{{
+// Descriptor set pool {{{
 static RgDescriptorSetPool *rgDescriptorSetPoolCreate(
-        RgDescriptorSetAllocator *set_allocator,
+        RgDescriptorSetLayout *set_layout,
         uint32_t set_count)
 {
     RgDescriptorSetPool *pool = malloc(sizeof(*pool));
     memset(pool, 0, sizeof(*pool));
 
     pool->set_count = set_count;
-    pool->set_index = set_allocator->set_index;
-    pool->set_allocator = set_allocator;
+    pool->set_layout = set_layout;
 
     ARRAY_OF(VkDescriptorPoolSize) pool_sizes = {0};
 
-    for (VkDescriptorSetLayoutBinding *binding = set_allocator->bindings;
-         binding != set_allocator->bindings + set_allocator->binding_count;
+    for (VkDescriptorSetLayoutBinding *binding = set_layout->bindings;
+         binding != set_layout->bindings + set_layout->binding_count;
          ++binding)
     {
         VkDescriptorPoolSize pool_size = {0};
@@ -3228,7 +3248,7 @@ static RgDescriptorSetPool *rgDescriptorSetPoolCreate(
     descriptor_pool_info.pPoolSizes = pool_sizes.ptr;
     descriptor_pool_info.poolSizeCount = (uint32_t)pool_sizes.len;
     VK_CHECK(vkCreateDescriptorPool(
-                set_allocator->device->device,
+                set_layout->device->device,
                 &descriptor_pool_info,
                 NULL,
                 &pool->pool));
@@ -3240,7 +3260,7 @@ static RgDescriptorSetPool *rgDescriptorSetPoolCreate(
 
     for (uint32_t i = 0; i < pool->set_count; ++i)
     {
-        set_layouts[i] = set_allocator->set_layout;
+        set_layouts[i] = set_layout->set_layout;
     }
 
     VkDescriptorSetAllocateInfo set_alloc_info = {0};
@@ -3250,7 +3270,7 @@ static RgDescriptorSetPool *rgDescriptorSetPoolCreate(
     set_alloc_info.pSetLayouts = set_layouts; 
 
     VK_CHECK(vkAllocateDescriptorSets(
-        set_allocator->device->device,
+        set_layout->device->device,
         &set_alloc_info,
         sets));
 
@@ -3280,145 +3300,160 @@ static void rgDescriptorSetPoolDestroy(
     free(pool->sets);
     free(pool);
 }
+// }}}
 
-static RgDescriptorSetAllocator *rgDescriptorSetAllocatorCreate(
+// Descriptor set layout {{{
+RgDescriptorSetLayout *rgDescriptorSetLayoutCreate(
         RgDevice *device,
-        uint32_t set_index,
-        VkDescriptorSetLayout set_layout,
-        VkDescriptorUpdateTemplate template,
-        VkDescriptorSetLayoutBinding *bindings,
-        uint32_t binding_count)
+        const RgDescriptorSetLayoutInfo *info)
 {
-    RgDescriptorSetAllocator *set_allocator = malloc(sizeof(*set_allocator));
-    memset(set_allocator, 0, sizeof(*set_allocator));
+    RgDescriptorSetLayout *set_layout = malloc(sizeof(*set_layout));
+    memset(set_layout, 0, sizeof(*set_layout));
 
-    set_allocator->device = device;
-    set_allocator->set_layout = set_layout;
-    set_allocator->template = template;
-    set_allocator->set_index = set_index;
+    set_layout->device = device;
 
-    set_allocator->bindings = malloc(sizeof(*set_allocator->bindings) * binding_count);
-    memcpy(set_allocator->bindings, bindings, sizeof(*bindings) * binding_count);
-    set_allocator->binding_count = binding_count;
+    set_layout->bindings = malloc(sizeof(*set_layout->bindings) * info->entry_count);
+    memset(set_layout->bindings, 0, sizeof(*set_layout->bindings) * info->entry_count);
+    set_layout->binding_count = info->entry_count;
 
-    return set_allocator;
+    assert(info->entry_count <= RG_MAX_DESCRIPTOR_SET_BINDINGS);
+    for (uint32_t b = 0; b < info->entry_count; ++b)
+    {
+        RgDescriptorSetLayoutEntry *entry = &info->entries[b];
+        VkDescriptorSetLayoutBinding *binding = &set_layout->bindings[entry->binding];
+
+        binding->binding = entry->binding;
+        binding->descriptorType = rgDescriptorTypeToVk(entry->type);
+        binding->descriptorCount = entry->count;
+        binding->stageFlags = rgShaderStageToVk(entry->shader_stages);
+    }
+
+    VkDescriptorSetLayoutCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    create_info.bindingCount = set_layout->binding_count;
+    create_info.pBindings = set_layout->bindings;
+
+    VK_CHECK(vkCreateDescriptorSetLayout(
+        device->device, &create_info, NULL, &set_layout->set_layout));
+
+    return set_layout;
 }
 
-static void rgDescriptorSetAllocatorDestroy(
+void rgDescriptorSetLayoutDestroy(
         RgDevice *device,
-        RgDescriptorSetAllocator *set_allocator)
+        RgDescriptorSetLayout *set_layout)
 {
-    for (RgDescriptorSetPool **pool = set_allocator->pools.ptr;
-         pool != set_allocator->pools.ptr + set_allocator->pools.len;
+    for (RgDescriptorSetPool **pool = set_layout->pools.ptr;
+         pool != set_layout->pools.ptr + set_layout->pools.len;
          ++pool)
     {
         rgDescriptorSetPoolDestroy(device, *pool);
     }
 
-    arrFree(&set_allocator->pools);
-    free(set_allocator->bindings);
-    free(set_allocator);
-}
+    vkDestroyDescriptorSetLayout(device->device, set_layout->set_layout, NULL);
 
-static RgDescriptorSet *rgAllocateDescriptorSet(
-        RgDevice *device,
-        RgDescriptorSetAllocator *set_allocator)
+    arrFree(&set_layout->pools);
+    free(set_layout->bindings);
+    free(set_layout);
+}
+// }}}
+
+// Descriptor set {{{
+RgDescriptorSet *rgDescriptorSetCreate(RgDevice *device, const RgDescriptorSetInfo *info)
 {
-    for (int64_t i = set_allocator->pools.len-1; i >= 0; --i)
+    RgDescriptorSetLayout *set_layout = info->layout;
+    RgDescriptorSet *descriptor_set = NULL;
+
+    for (int64_t i = set_layout->pools.len-1; i >= 0; --i)
     {
-        RgDescriptorSetPool *pool = set_allocator->pools.ptr[i];
+        RgDescriptorSetPool *pool = set_layout->pools.ptr[i];
         if (pool->free_list.len == 0) continue;
 
         RgDescriptorSet *set = pool->free_list.ptr[pool->free_list.len-1];
         pool->free_list.len--;
-        return set;
+        descriptor_set = set;
+        break;
     }
 
-    uint32_t pool_set_count = 8;
-    if (set_allocator->pools.len > 0) 
+    if (descriptor_set == NULL)
     {
-        // Double the set count of the previous pool
-        pool_set_count =
-            set_allocator->pools.ptr[set_allocator->pools.len-1]->set_count * 2;
+        uint32_t pool_set_count = 8;
+        if (set_layout->pools.len > 0)
+        {
+            // Double the set count of the previous pool
+            pool_set_count =
+                set_layout->pools.ptr[set_layout->pools.len-1]->set_count * 2;
+        }
+        pool_set_count = RG_MIN(pool_set_count, 128);
+
+        RgDescriptorSetPool *new_pool =
+            rgDescriptorSetPoolCreate(set_layout, pool_set_count);
+        arrPush(&set_layout->pools, new_pool);
+
+        return rgDescriptorSetCreate(device, info);
     }
-    pool_set_count = RG_MIN(pool_set_count, 128);
 
-    RgDescriptorSetPool *new_pool =
-        rgDescriptorSetPoolCreate(set_allocator, pool_set_count);
-    arrPush(&set_allocator->pools, new_pool);
-
-    return rgAllocateDescriptorSet(
-        device,
-        set_allocator);
-}
-
-static void rgFreeDescriptorSet(RgDescriptorSet *set)
-{
-    RgDescriptorSetPool *pool = set->pool;
-    // Return the set to the free list
-    arrPush(&pool->free_list, set);
-    assert(pool->free_list.len <= pool->set_count);
-}
-
-void rgUpdateDescriptorSet(
-        RgDescriptorSet *set,
-        uint32_t descriptor_count,
-        const RgDescriptor *descriptors)
-{
-    assert(set->pool->set_allocator->binding_count == descriptor_count);
-
-    RgDescriptorInternal descriptors_internal[RG_MAX_DESCRIPTOR_BINDINGS];
-    VkDescriptorSetLayoutBinding *bindings = set->pool->set_allocator->bindings;
-
-    for (uint32_t i = 0; i < descriptor_count; ++i)
+    VkWriteDescriptorSet writes[RG_MAX_DESCRIPTOR_SET_BINDINGS];
+    VkDescriptorBufferInfo buffer_infos[RG_MAX_DESCRIPTOR_SET_BINDINGS];
+    VkDescriptorImageInfo image_infos[RG_MAX_DESCRIPTOR_SET_BINDINGS];
+    for (uint32_t i = 0; i < info->entry_count; ++i)
     {
-        memset(&descriptors_internal[i], 0, sizeof(descriptors_internal[i]));
+        VkWriteDescriptorSet *write = &writes[i];
+        memset(write, 0, sizeof(*write));
 
-        switch (bindings[i].descriptorType)
+        RgDescriptorSetEntry *entry = &info->entries[i];
+
+        write->sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write->dstSet = descriptor_set->set;
+        write->dstBinding = entry->binding;
+        write->descriptorCount = 1;
+        write->descriptorType = set_layout->bindings[entry->binding].descriptorType;
+
+        if (entry->buffer)
         {
-        case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
-        {
-            descriptors_internal[i].image.imageView = descriptors[i].image.image->view;
-            descriptors_internal[i].image.imageLayout =
-                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            break;
-        }
-        case VK_DESCRIPTOR_TYPE_SAMPLER:
-        {
-            descriptors_internal[i].image.sampler = descriptors[i].image.sampler->sampler;
-            break;
-        }
-        case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
-        {
-            descriptors_internal[i].image.imageView = descriptors[i].image.image->view;
-            descriptors_internal[i].image.imageLayout =
-                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            descriptors_internal[i].image.sampler = descriptors[i].image.sampler->sampler;
-            break;
-        }
-        case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
-        case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
-        case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
-        case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
-        {
-            descriptors_internal[i].buffer.buffer = descriptors[i].buffer.buffer->buffer;
-            descriptors_internal[i].buffer.offset = descriptors[i].buffer.offset;
-            descriptors_internal[i].buffer.range = descriptors[i].buffer.range;
-            if (descriptors_internal[i].buffer.range == 0)
+            VkDescriptorBufferInfo *buffer_info = &buffer_infos[i];
+            write->pBufferInfo = buffer_info;
+
+            buffer_info->buffer = entry->buffer->buffer;
+            buffer_info->offset = entry->offset;
+            buffer_info->range = entry->size;
+            if (entry->size == 0)
             {
-                descriptors_internal[i].buffer.range = VK_WHOLE_SIZE;
+                buffer_info->range = VK_WHOLE_SIZE;
             }
-            break;
         }
 
-        default: assert(0);
+        if (entry->image)
+        {
+            VkDescriptorImageInfo *image_info = &image_infos[i];
+            write->pImageInfo = image_info;
+
+            image_info->imageView = entry->image->view;
+            image_info->imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        }
+
+        if (entry->sampler)
+        {
+            VkDescriptorImageInfo *image_info = &image_infos[i];
+            write->pImageInfo = image_info;
+
+            image_info->sampler = entry->sampler->sampler;
         }
     }
 
-    RgDevice *device = set->pool->set_allocator->device;
-    VkDescriptorUpdateTemplate template = set->pool->set_allocator->template;
-    vkUpdateDescriptorSetWithTemplate(
-            device->device, set->set, template, descriptors_internal);
+    vkUpdateDescriptorSets(set_layout->device->device, info->entry_count, writes, 0, NULL);
+
+    return descriptor_set;
+}
+
+void rgDescriptorSetDestroy(RgDevice *device, RgDescriptorSet *descriptor_set)
+{
+    (void)device;
+
+    RgDescriptorSetPool *pool = descriptor_set->pool;
+    // Return the set to the free list
+    arrPush(&pool->free_list, descriptor_set);
+    assert(pool->free_list.len <= pool->set_count);
 }
 // }}}
 
@@ -3453,18 +3488,6 @@ RgPipeline *rgGraphicsPipelineCreate(RgDevice *device, const RgGraphicsPipelineI
         memcpy(pipeline->graphics.fragment_entry, info->fragment_entry, str_size);
     }
 
-    // Bindings
-    pipeline->num_bindings = info->num_bindings;
-    if (pipeline->num_bindings > 0)
-    {
-        pipeline->bindings =
-            malloc(pipeline->num_bindings * sizeof(*pipeline->bindings));
-        memcpy(
-            pipeline->bindings,
-            info->bindings,
-            pipeline->num_bindings * sizeof(*pipeline->bindings));
-    }
-
     // Vertex attributes
     pipeline->graphics.num_vertex_attributes = info->num_vertex_attributes;
     pipeline->graphics.vertex_attributes = malloc(
@@ -3479,71 +3502,29 @@ RgPipeline *rgGraphicsPipelineCreate(RgDevice *device, const RgGraphicsPipelineI
     rgHashmapInit(&pipeline->graphics.instances, 8);
 
     //
-    // Create descriptor set layouts
-    //
-
-    pipeline->num_sets = 0;
-    for (uint32_t b = 0; b < pipeline->num_bindings; ++b)
-    {
-        RgPipelineBinding *binding = &pipeline->bindings[b];
-        pipeline->num_sets = RG_MAX(pipeline->num_sets, binding->set + 1);
-    }
-
-    VkDescriptorSetLayoutBinding **bindings =
-        malloc(sizeof(VkDescriptorSetLayoutBinding *) * pipeline->num_sets);
-    uint32_t *binding_counts = malloc(sizeof(uint32_t) * pipeline->num_sets);
-    memset(binding_counts, 0, sizeof(uint32_t) * pipeline->num_sets);
-
-    for (uint32_t b = 0; b < pipeline->num_bindings; ++b)
-    {
-        RgPipelineBinding *binding = &pipeline->bindings[b];
-        binding_counts[binding->set] =
-            RG_MAX(binding_counts[binding->set], binding->binding + 1);
-    }
-
-    for (uint32_t set = 0; set < pipeline->num_sets; ++set)
-    {
-        bindings[set] = malloc(sizeof(VkDescriptorSetLayoutBinding) * binding_counts[set]);
-        memset(bindings[set], 0, sizeof(VkDescriptorSetLayoutBinding) * binding_counts[set]);
-    }
-
-    for (uint32_t b = 0; b < pipeline->num_bindings; ++b)
-    {
-        RgPipelineBinding *binding = &pipeline->bindings[b];
-        VkDescriptorSetLayoutBinding *vk_binding = &bindings[binding->set][binding->binding];
-
-        vk_binding->binding = binding->binding;
-        vk_binding->descriptorType = rgPipelineBindingTypeToVk(binding->type);
-        vk_binding->descriptorCount = 1;
-        vk_binding->stageFlags = VK_SHADER_STAGE_ALL; // TODO: this could be more specific
-    }
-
-    pipeline->set_layouts = malloc(sizeof(*pipeline->set_layouts) * pipeline->num_sets);
-    for (uint32_t set = 0; set < pipeline->num_sets; ++set)
-    {
-        VkDescriptorSetLayoutCreateInfo create_info = {0};
-        create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        create_info.bindingCount = binding_counts[set];
-        create_info.pBindings = bindings[set];
-
-        VK_CHECK(vkCreateDescriptorSetLayout(
-            device->device, &create_info, NULL, &pipeline->set_layouts[set]));
-    }
-
-    //
     // Create pipeline layout
     //
+
+    VkDescriptorSetLayout *vk_set_layouts =
+        malloc(sizeof(*vk_set_layouts) * info->set_layout_count);
+
+    for (uint32_t i = 0; i < info->set_layout_count; ++i)
+    {
+        vk_set_layouts[i] = info->set_layouts[i]->set_layout;
+    }
 
     VkPipelineLayoutCreateInfo pipeline_layout_info;
     memset(&pipeline_layout_info, 0, sizeof(pipeline_layout_info));
     pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipeline_layout_info.setLayoutCount = pipeline->num_sets;
-    pipeline_layout_info.pSetLayouts = pipeline->set_layouts;
+    pipeline_layout_info.setLayoutCount = info->set_layout_count;
+    pipeline_layout_info.pSetLayouts = vk_set_layouts;
     pipeline_layout_info.pushConstantRangeCount = 0;
     pipeline_layout_info.pPushConstantRanges = NULL;
 
     VK_CHECK(vkCreatePipelineLayout(
         device->device, &pipeline_layout_info, NULL, &pipeline->pipeline_layout));
+
+    free(vk_set_layouts);
 
     if (info->vertex && info->vertex_size > 0)
     {
@@ -3575,70 +3556,6 @@ RgPipeline *rgGraphicsPipelineCreate(RgDevice *device, const RgGraphicsPipelineI
             &pipeline->graphics.fragment_shader));
     }
 
-    pipeline->update_templates =
-        malloc(sizeof(*pipeline->set_allocators) * pipeline->num_sets);
-
-    VkDescriptorUpdateTemplateEntry update_entries[RG_MAX_DESCRIPTOR_BINDINGS];
-
-    for (uint32_t s = 0; s < pipeline->num_sets; ++s)
-    {
-        assert(binding_counts[s] <= RG_MAX_DESCRIPTOR_BINDINGS);
-
-        for (uint32_t b = 0; b < binding_counts[s]; ++b)
-        {
-            VkDescriptorSetLayoutBinding *binding = &bindings[s][b];
-            assert(binding->binding == b);
-
-            VkDescriptorUpdateTemplateEntry entry = {0};
-            entry.dstBinding = binding->binding;
-            entry.dstArrayElement = 0;
-            entry.descriptorCount = binding->descriptorCount;
-            entry.descriptorType = binding->descriptorType;
-            entry.offset = binding->binding * sizeof(RgDescriptorInternal);
-            entry.stride = sizeof(RgDescriptorInternal);
-
-            update_entries[b] = entry;
-        }
-
-        VkDescriptorUpdateTemplateCreateInfo template_ci = {0};
-        template_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_UPDATE_TEMPLATE_CREATE_INFO;
-        template_ci.templateType = VK_DESCRIPTOR_UPDATE_TEMPLATE_TYPE_DESCRIPTOR_SET;
-        template_ci.descriptorSetLayout = pipeline->set_layouts[s];
-        template_ci.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        template_ci.pipelineLayout = pipeline->pipeline_layout;
-        template_ci.set = s;
-        template_ci.descriptorUpdateEntryCount = binding_counts[s];
-        template_ci.pDescriptorUpdateEntries = update_entries;
-
-        VK_CHECK(vkCreateDescriptorUpdateTemplate(
-                device->device,
-                &template_ci,
-                NULL,
-                &pipeline->update_templates[s]));
-    }
-
-    pipeline->set_allocators =
-        malloc(sizeof(*pipeline->set_allocators) * pipeline->num_sets);
-
-    for (uint32_t s = 0; s < pipeline->num_sets; ++s)
-    {
-        pipeline->set_allocators[s] = rgDescriptorSetAllocatorCreate(
-                device,
-                s,
-                pipeline->set_layouts[s],
-                pipeline->update_templates[s],
-                bindings[s],
-                binding_counts[s]);
-    }
-
-    for (uint32_t set = 0; set < pipeline->num_sets; ++set)
-    {
-        free(bindings[set]);
-    }
-
-    free(bindings);
-    free(binding_counts);
-
     return pipeline;
 }
 
@@ -3649,87 +3566,33 @@ RgPipeline *rgComputePipelineCreate(RgDevice *device, const RgComputePipelineInf
 
     pipeline->device = device;
     pipeline->type = RG_PIPELINE_TYPE_COMPUTE;
-    pipeline->num_bindings = info->num_bindings;
-    if (pipeline->num_bindings > 0)
-    {
-        pipeline->bindings =
-            malloc(pipeline->num_bindings * sizeof(*pipeline->bindings));
-        memcpy(
-            pipeline->bindings,
-            info->bindings,
-            pipeline->num_bindings * sizeof(*pipeline->bindings));
-    }
 
     assert(info->code && info->code_size > 0);
-
-    //
-    // Create descriptor set layouts
-    //
-
-    pipeline->num_sets = 0;
-    for (RgPipelineBinding *binding = pipeline->bindings;
-         binding != pipeline->bindings + pipeline->num_bindings;
-         ++binding)
-    {
-        pipeline->num_sets = RG_MAX(pipeline->num_sets, binding->set + 1);
-    }
-
-    VkDescriptorSetLayoutBinding **bindings =
-        malloc(sizeof(VkDescriptorSetLayoutBinding *) * pipeline->num_sets);
-    uint32_t *binding_counts = malloc(sizeof(*binding_counts) * pipeline->num_sets);
-
-    for (RgPipelineBinding *binding = pipeline->bindings;
-         binding != pipeline->bindings + pipeline->num_bindings;
-         ++binding)
-    {
-        binding_counts[binding->set] =
-            RG_MAX(binding_counts[binding->set], binding->binding + 1);
-    }
-
-    for (uint32_t set = 0; set < pipeline->num_sets; ++set)
-    {
-        bindings[set] = malloc(sizeof(VkDescriptorSetLayoutBinding) * binding_counts[set]);
-        memset(bindings[set], 0, sizeof(VkDescriptorSetLayoutBinding) * binding_counts[set]);
-    }
-
-    for (RgPipelineBinding *binding = pipeline->bindings;
-         binding != pipeline->bindings + pipeline->num_bindings;
-         ++binding)
-    {
-        VkDescriptorSetLayoutBinding *vk_binding = &bindings[binding->set][binding->binding];
-
-        vk_binding->binding = binding->binding;
-        vk_binding->descriptorType = rgPipelineBindingTypeToVk(binding->type);
-        vk_binding->descriptorCount = 1;
-        vk_binding->stageFlags = VK_SHADER_STAGE_ALL; // TODO: this could be more specific
-    }
-
-    pipeline->set_layouts = malloc(sizeof(*pipeline->set_layouts) * pipeline->num_sets);
-    for (uint32_t set = 0; set < pipeline->num_sets; ++set)
-    {
-        VkDescriptorSetLayoutCreateInfo create_info = {0};
-        create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        create_info.bindingCount = binding_counts[set];
-        create_info.pBindings = bindings[set];
-
-        VK_CHECK(vkCreateDescriptorSetLayout(
-            device->device, &create_info, NULL, &pipeline->set_layouts[set]));
-    }
 
     //
     // Create pipeline layout
     //
 
+    VkDescriptorSetLayout *vk_set_layouts =
+        malloc(sizeof(*vk_set_layouts) * info->set_layout_count);
+
+    for (uint32_t i = 0; i < info->set_layout_count; ++i)
+    {
+        vk_set_layouts[i] = info->set_layouts[i].set_layout;
+    }
+
     VkPipelineLayoutCreateInfo pipeline_layout_info;
     memset(&pipeline_layout_info, 0, sizeof(pipeline_layout_info));
     pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipeline_layout_info.setLayoutCount = pipeline->num_sets;
-    pipeline_layout_info.pSetLayouts = pipeline->set_layouts;
+    pipeline_layout_info.setLayoutCount = info->set_layout_count;
+    pipeline_layout_info.pSetLayouts = vk_set_layouts;
     pipeline_layout_info.pushConstantRangeCount = 0;
     pipeline_layout_info.pPushConstantRanges = NULL;
 
     VK_CHECK(vkCreatePipelineLayout(
         device->device, &pipeline_layout_info, NULL, &pipeline->pipeline_layout));
+
+    free(vk_set_layouts);
 
     VkShaderModuleCreateInfo module_create_info;
     memset(&module_create_info, 0, sizeof(module_create_info));
@@ -3763,93 +3626,12 @@ RgPipeline *rgComputePipelineCreate(RgDevice *device, const RgComputePipelineInf
         NULL,
         &pipeline->compute.instance);
 
-    pipeline->update_templates =
-        malloc(sizeof(*pipeline->set_allocators) * pipeline->num_sets);
-
-    VkDescriptorUpdateTemplateEntry update_entries[RG_MAX_DESCRIPTOR_BINDINGS];
-
-    for (uint32_t s = 0; s < pipeline->num_sets; ++s)
-    {
-        assert(binding_counts[s] <= RG_MAX_DESCRIPTOR_BINDINGS);
-
-        for (uint32_t b = 0; b < binding_counts[s]; ++b)
-        {
-            VkDescriptorSetLayoutBinding *binding = &bindings[s][b];
-            assert(binding->binding == b);
-
-            VkDescriptorUpdateTemplateEntry entry = {0};
-            entry.dstBinding = binding->binding;
-            entry.dstArrayElement = 0;
-            entry.descriptorCount = binding->descriptorCount;
-            entry.descriptorType = binding->descriptorType;
-            entry.offset = binding->binding * sizeof(RgDescriptorInternal);
-            entry.stride = sizeof(RgDescriptorInternal);
-
-            update_entries[b] = entry;
-        }
-
-        VkDescriptorUpdateTemplateCreateInfo template_ci = {0};
-        template_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_UPDATE_TEMPLATE_CREATE_INFO;
-        template_ci.templateType = VK_DESCRIPTOR_UPDATE_TEMPLATE_TYPE_DESCRIPTOR_SET;
-        template_ci.descriptorSetLayout = pipeline->set_layouts[s];
-        template_ci.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        template_ci.pipelineLayout = pipeline->pipeline_layout;
-        template_ci.set = s;
-        template_ci.descriptorUpdateEntryCount = binding_counts[s];
-        template_ci.pDescriptorUpdateEntries = update_entries;
-
-        VK_CHECK(vkCreateDescriptorUpdateTemplate(
-                device->device,
-                &template_ci,
-                NULL,
-                &pipeline->update_templates[s]));
-    }
-
-    pipeline->set_allocators =
-        malloc(sizeof(*pipeline->set_allocators) * pipeline->num_sets);
-
-    for (uint32_t s = 0; s < pipeline->num_sets; ++s)
-    {
-        pipeline->set_allocators[s] = rgDescriptorSetAllocatorCreate(
-                device,
-                s,
-                pipeline->set_layouts[s],
-                pipeline->update_templates[s],
-                bindings[s],
-                binding_counts[s]);
-    }
-
-    for (uint32_t set = 0; set < pipeline->num_sets; ++set)
-    {
-        free(bindings[set]);
-    }
-
-    free(bindings);
-    free(binding_counts);
-
     return pipeline;
 }
 
 void rgPipelineDestroy(RgDevice *device, RgPipeline *pipeline)
 {
     VK_CHECK(vkDeviceWaitIdle(device->device));
-
-    for (uint32_t i = 0; i < pipeline->num_sets; ++i)
-    {
-        rgDescriptorSetAllocatorDestroy(device, pipeline->set_allocators[i]);
-    }
-
-    for (uint32_t set = 0; set < pipeline->num_sets; ++set)
-    {
-        vkDestroyDescriptorSetLayout(
-                device->device,
-                pipeline->set_layouts[set],
-                NULL);
-        vkDestroyDescriptorUpdateTemplate(
-                device->device,
-                pipeline->update_templates[set],
-                NULL);
-    }
 
     vkDestroyPipelineLayout(device->device, pipeline->pipeline_layout, NULL);
 
@@ -3911,10 +3693,6 @@ void rgPipelineDestroy(RgDevice *device, RgPipeline *pipeline)
     }
     }
 
-    free(pipeline->set_allocators);
-    free(pipeline->bindings);
-    free(pipeline->set_layouts);
-    free(pipeline->update_templates);
     free(pipeline);
 }
 
@@ -4129,18 +3907,6 @@ static VkPipeline rgGraphicsPipelineGetInstance(
 
     return instance;
 }
-
-RgDescriptorSet *rgPipelineCreateDescriptorSet(RgPipeline *pipeline, uint32_t set_index)
-{
-    RgDescriptorSetAllocator *set_allocator = pipeline->set_allocators[set_index];
-    return rgAllocateDescriptorSet(pipeline->device, set_allocator);
-}
-
-void rgPipelineDestroyDescriptorSet(RgPipeline *pipeline, RgDescriptorSet *set)
-{
-    (void)pipeline;
-    rgFreeDescriptorSet(set);
-}
 // }}}
 
 // Command buffers {{{
@@ -4339,6 +4105,7 @@ void rgCmdBindPipeline(RgCmdBuffer *cmd_buffer, RgPipeline *pipeline)
 
 void rgCmdBindDescriptorSet(
         RgCmdBuffer *cmd_buffer,
+        uint32_t index,
         RgDescriptorSet *set,
         uint32_t dynamic_offset_count,
         uint32_t *dynamic_offsets)
@@ -4347,7 +4114,7 @@ void rgCmdBindDescriptorSet(
         cmd_buffer->cmd_buffer,
         cmd_buffer->current_bind_point,
         cmd_buffer->current_pipeline->pipeline_layout,
-        set->pool->set_index,
+        index,
         1,
         &set->set,
         dynamic_offset_count,

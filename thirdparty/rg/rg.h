@@ -18,6 +18,7 @@ typedef struct RgSampler RgSampler;
 typedef struct RgCmdPool RgCmdPool;
 typedef struct RgCmdBuffer RgCmdBuffer;
 typedef struct RgRenderPass RgRenderPass;
+typedef struct RgDescriptorSetLayout RgDescriptorSetLayout;
 typedef struct RgDescriptorSet RgDescriptorSet;
 typedef uint32_t RgFlags;
 
@@ -247,6 +248,57 @@ typedef struct RgRenderPassInfo
     RgImage *depth_stencil_attachment;
 } RgRenderPassInfo;
 
+typedef enum RgDescriptorType
+{
+    RG_DESCRIPTOR_UNIFORM_BUFFER         = 1,
+    RG_DESCRIPTOR_UNIFORM_BUFFER_DYNAMIC = 2,
+    RG_DESCRIPTOR_STORAGE_BUFFER         = 3,
+    RG_DESCRIPTOR_STORAGE_BUFFER_DYNAMIC = 4,
+    RG_DESCRIPTOR_IMAGE                  = 5,
+    RG_DESCRIPTOR_SAMPLER                = 6,
+    RG_DESCRIPTOR_IMAGE_SAMPLER          = 7,
+} RgDescriptorType;
+
+typedef enum RgShaderStage
+{
+    RG_SHADER_STAGE_FRAGMENT     = 1 << 0,
+    RG_SHADER_STAGE_VERTEX       = 1 << 1,
+    RG_SHADER_STAGE_ALL_GRAPHICS = 1 << 2,
+    RG_SHADER_STAGE_COMPUTE      = 1 << 3,
+    RG_SHADER_STAGE_ALL          = 1 << 4,
+} RgShaderStage;
+
+typedef struct RgDescriptorSetLayoutEntry
+{
+    uint32_t binding;
+    RgDescriptorType type;
+    RgFlags shader_stages;
+    uint32_t count;
+} RgDescriptorSetLayoutEntry;
+
+typedef struct RgDescriptorSetLayoutInfo
+{
+    RgDescriptorSetLayoutEntry *entries;
+    uint32_t entry_count;
+} RgDescriptorSetLayoutInfo;
+
+typedef struct RgDescriptorSetEntry
+{
+    uint32_t binding;
+    RgBuffer *buffer;
+    size_t size;
+    size_t offset;
+    RgImage *image;
+    RgSampler *sampler;
+} RgDescriptorSetEntry;
+
+typedef struct RgDescriptorSetInfo
+{
+    RgDescriptorSetLayout *layout;
+    RgDescriptorSetEntry *entries;
+    uint32_t entry_count;
+} RgDescriptorSetInfo;
+
 typedef enum RgIndexType
 {
     RG_INDEX_TYPE_UINT32 = 0,
@@ -279,24 +331,6 @@ typedef enum RgCullMode
     RG_CULL_MODE_FRONT          = 2,
     RG_CULL_MODE_FRONT_AND_BACK = 3,
 } RgCullMode;
-
-typedef enum RgPipelineBindingType
-{
-    RG_BINDING_UNIFORM_BUFFER         = 1,
-    RG_BINDING_UNIFORM_BUFFER_DYNAMIC = 2,
-    RG_BINDING_STORAGE_BUFFER         = 3,
-    RG_BINDING_STORAGE_BUFFER_DYNAMIC = 4,
-    RG_BINDING_IMAGE                  = 5,
-    RG_BINDING_SAMPLER                = 6,
-    RG_BINDING_IMAGE_SAMPLER          = 7,
-} RgPipelineBindingType;
-
-typedef struct RgPipelineBinding
-{
-    uint32_t set;
-    uint32_t binding;
-    RgPipelineBindingType type;
-} RgPipelineBinding;
 
 typedef struct RgVertexAttribute
 {
@@ -343,8 +377,8 @@ typedef struct RgGraphicsPipelineInfo
     uint32_t           num_vertex_attributes;
     RgVertexAttribute *vertex_attributes;
 
-    uint32_t           num_bindings;
-    RgPipelineBinding *bindings;
+    RgDescriptorSetLayout **set_layouts;
+    uint32_t set_layout_count;
 
     const uint8_t *vertex;
     size_t         vertex_size;
@@ -357,32 +391,13 @@ typedef struct RgGraphicsPipelineInfo
 
 typedef struct RgComputePipelineInfo
 {
-    uint32_t num_bindings;
-    RgPipelineBinding *bindings;
+    RgDescriptorSetLayout *set_layouts;
+    uint32_t set_layout_count;
 
     const uint8_t *code;
     size_t         code_size;
     const char    *entry;
 } RgComputePipelineInfo;
-
-typedef struct RgDescriptorImage
-{
-    RgImage   *image;
-    RgSampler *sampler;
-} RgDescriptorImage;
-
-typedef struct RgDescriptorBuffer
-{
-    RgBuffer *buffer;
-    size_t    offset;
-    size_t    range; // 0 means whole size
-} RgDescriptorBuffer;
-
-typedef union RgDescriptor
-{
-     RgDescriptorImage  image;
-     RgDescriptorBuffer buffer;
-} RgDescriptor;
 
 typedef struct RgImageCopy
 {
@@ -447,15 +462,16 @@ void rgSwapchainPresent(RgSwapchain *swapchain);
 RgRenderPass *rgRenderPassCreate(RgDevice *device, const RgRenderPassInfo *info);
 void rgRenderPassDestroy(RgDevice *device, RgRenderPass *render_pass);
 
+RgDescriptorSetLayout *rgDescriptorSetLayoutCreate(
+        RgDevice *device, const RgDescriptorSetLayoutInfo *info);
+void rgDescriptorSetLayoutDestroy(RgDevice *device, RgDescriptorSetLayout *set_layout);
+
+RgDescriptorSet *rgDescriptorSetCreate(RgDevice *device, const RgDescriptorSetInfo *info);
+void rgDescriptorSetDestroy(RgDevice *device, RgDescriptorSet *descriptor_set);
+
 RgPipeline *rgGraphicsPipelineCreate(RgDevice *device, const RgGraphicsPipelineInfo *info);
 RgPipeline *rgComputePipelineCreate(RgDevice *device, const RgComputePipelineInfo *info);
 void rgPipelineDestroy(RgDevice *device, RgPipeline *pipeline);
-RgDescriptorSet *rgPipelineCreateDescriptorSet(RgPipeline *pipeline, uint32_t set_index);
-void rgPipelineDestroyDescriptorSet(RgPipeline *pipeline, RgDescriptorSet *set);
-void rgUpdateDescriptorSet(
-        RgDescriptorSet *set,
-        uint32_t descriptor_count,
-        const RgDescriptor *descriptors);
 
 RgCmdPool *rgCmdPoolCreate(RgDevice *device, RgQueueType type);
 void rgCmdPoolDestroy(RgDevice *device, RgCmdPool *cmd_pool);
@@ -470,6 +486,7 @@ void rgCmdBufferSubmit(RgCmdBuffer *cmd_buffer);
 void rgCmdBindPipeline(RgCmdBuffer *cmd_buffer, RgPipeline *pipeline);
 void rgCmdBindDescriptorSet(
         RgCmdBuffer *cmd_buffer,
+        uint32_t index,
         RgDescriptorSet *set,
         uint32_t dynamic_offset_count,
         uint32_t *dynamic_offsets);

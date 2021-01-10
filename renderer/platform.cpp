@@ -6,7 +6,6 @@
 #include <stdint.h>
 #include <string.h>
 #include <assert.h>
-#include <tinyshader/tinyshader.h>
 
 #ifdef __linux__
 #include <unistd.h>
@@ -82,6 +81,11 @@ struct Platform
     RgDevice *device;
     RgSwapchain *swapchain;
     const char *exe_dir;
+
+    RgCmdPool *transfer_cmd_pool;
+    RgImage *white_image;
+    RgImage *black_image;
+    RgSampler *default_sampler;
 };
 
 void PlatformResizeResources(Platform *platform)
@@ -150,11 +154,62 @@ Platform *PlatformCreate(const char *window_title)
 
     PlatformResizeResources(platform);
 
+    platform->transfer_cmd_pool = rgCmdPoolCreate(platform->device, RG_QUEUE_TYPE_TRANSFER);
+
+    RgImageInfo image_info = {};
+    image_info.extent = {1, 1, 1};
+    image_info.format = RG_FORMAT_RGBA8_UNORM;
+    image_info.usage = RG_IMAGE_USAGE_SAMPLED | RG_IMAGE_USAGE_TRANSFER_DST;
+    image_info.aspect = RG_IMAGE_ASPECT_COLOR;
+    image_info.sample_count = 1;
+    image_info.mip_count = 1;
+    image_info.layer_count = 1;
+
+    platform->white_image = rgImageCreate(platform->device, &image_info);
+    platform->black_image = rgImageCreate(platform->device, &image_info);
+
+    uint8_t white_data[] = {0, 0, 0, 255};
+    uint8_t black_data[] = {0, 0, 0, 255};
+
+    RgImageCopy image_copy = {};
+    RgExtent3D extent = {1, 1, 1};
+
+    image_copy.image = platform->white_image;
+    rgImageUpload(
+            platform->device,
+            platform->transfer_cmd_pool,
+            &image_copy,
+            &extent,
+            sizeof(white_data),
+            white_data);
+
+    image_copy.image = platform->black_image;
+    rgImageUpload(
+            platform->device,
+            platform->transfer_cmd_pool,
+            &image_copy,
+            &extent,
+            sizeof(black_data),
+            black_data);
+
+    RgSamplerInfo sampler_info = {};
+    sampler_info.anisotropy = true;
+    sampler_info.max_anisotropy = 16.0f;
+    sampler_info.min_filter = RG_FILTER_LINEAR;
+    sampler_info.mag_filter = RG_FILTER_LINEAR;
+    sampler_info.address_mode = RG_SAMPLER_ADDRESS_MODE_REPEAT;
+    sampler_info.border_color = RG_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+    platform->default_sampler = rgSamplerCreate(platform->device, &sampler_info);
+
     return platform;
 }
 
 void PlatformDestroy(Platform *platform)
 {
+    rgImageDestroy(platform->device, platform->white_image);
+    rgImageDestroy(platform->device, platform->black_image);
+    rgSamplerDestroy(platform->device, platform->default_sampler);
+    rgCmdPoolDestroy(platform->device, platform->transfer_cmd_pool);
     rgSwapchainDestroy(platform->device, platform->swapchain);
     rgDeviceDestroy(platform->device);
 
@@ -288,250 +343,19 @@ uint8_t *PlatformLoadFileRelative(Platform *platform, const char *relative_path,
     return data;
 }
 
-static bool isWhitespace(char c)
+RgImage *PlatformGetWhiteImage(Platform *platform)
 {
-    return c == ' ' || c == '\t';
+    return platform->white_image;
 }
 
-static bool isWhitespaceOrNewLine(char c)
+RgImage *PlatformGetBlackImage(Platform *platform)
 {
-    return c == ' ' || c == '\r' || c == '\n' || c == '\t';
+    return platform->black_image;
 }
 
-static bool stringToBool(const char *str, size_t len, bool *value) 
+RgSampler *PlatformGetDefaultSampler(Platform *platform)
 {
-        if (strncmp(str, "true", len) == 0) *value = true;
-        else if (strncmp(str, "false", len) == 0) *value = false;
-        else return false;
-        return true;
-}
-
-static bool stringToTopology(const char *str, size_t len, RgPrimitiveTopology *value)
-{
-    if (strncmp(str, "triangle_list", len) == 0) *value = RG_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    else if (strncmp(str, "line_list", len) == 0) *value = RG_PRIMITIVE_TOPOLOGY_LINE_LIST;
-    else return false;
-    return true;
-}
-
-static bool stringToFrontFace(const char *str, size_t len, RgFrontFace *value)
-{
-    if (strncmp(str, "counter_clockwise", len) == 0) *value = RG_FRONT_FACE_COUNTER_CLOCKWISE;
-    else if (strncmp(str, "clockwise", len) == 0) *value = RG_FRONT_FACE_CLOCKWISE;
-    else return false;
-    return true;
-}
-
-static bool stringToCullMode(const char *str, size_t len, RgCullMode * value)
-{
-    if (strncmp(str, "none", len) == 0) *value =  RG_CULL_MODE_NONE;
-    else if (strncmp(str, "front", len) == 0) *value =  RG_CULL_MODE_FRONT;
-    else if (strncmp(str, "back", len) == 0) *value =  RG_CULL_MODE_BACK;
-    else if (strncmp(str, "front_and_back", len) == 0) *value = RG_CULL_MODE_FRONT_AND_BACK;
-    else return false;
-    return true;
-}
-
-static bool stringToPolygonMode(const char *str, size_t len, RgPolygonMode *value) 
-{
-    if (strncmp(str, "fill", len) == 0) *value = RG_POLYGON_MODE_FILL;
-    else if (strncmp(str, "line", len) == 0) *value = RG_POLYGON_MODE_LINE;
-    else if (strncmp(str, "point", len) == 0) *value = RG_POLYGON_MODE_POINT;
-    else return false;
-    return true;
-}
-
-static bool stringToCompareOp(const char *str, size_t len, RgCompareOp *value)
-{
-    if (strncmp(str, "never", len) == 0) *value = RG_COMPARE_OP_NEVER;
-    if (strncmp(str, "less", len) == 0) *value = RG_COMPARE_OP_LESS;
-    if (strncmp(str, "equal", len) == 0) *value = RG_COMPARE_OP_EQUAL;
-    if (strncmp(str, "less_or_equal", len) == 0) *value = RG_COMPARE_OP_LESS_OR_EQUAL;
-    if (strncmp(str, "greater", len) == 0) *value = RG_COMPARE_OP_GREATER;
-    if (strncmp(str, "not_equal", len) == 0) *value = RG_COMPARE_OP_NOT_EQUAL;
-    if (strncmp(str, "greater_or_equal", len) == 0)
-        *value = RG_COMPARE_OP_GREATER_OR_EQUAL;
-    if (strncmp(str, "always", len) == 0)
-        *value = RG_COMPARE_OP_ALWAYS;
-    else return false;
-    return true;
-}
-
-RgPipeline *PlatformCreatePipeline(Platform *platform, const char *hlsl, size_t hlsl_size)
-{
-    uint8_t *vertex_code = NULL;
-    size_t vertex_code_size = 0;
-
-    // Compile vertex
-    {
-        TsCompilerOptions *options = tsCompilerOptionsCreate();
-        tsCompilerOptionsSetStage(options, TS_SHADER_STAGE_VERTEX);
-        tsCompilerOptionsSetEntryPoint(options, "vertex", strlen("vertex"));
-        tsCompilerOptionsSetSource(options, hlsl, hlsl_size, NULL, 0);
-
-        TsCompilerOutput *output = tsCompile(options);
-        const char *errors = tsCompilerOutputGetErrors(output);
-        if (errors)
-        {
-            printf("Shader compilation error:\n%s\n", errors);
-
-            tsCompilerOutputDestroy(output);
-            tsCompilerOptionsDestroy(options);
-            exit(1);
-        }
-
-        size_t spirv_size = 0;
-        const uint8_t *spirv = tsCompilerOutputGetSpirv(output, &spirv_size);
-
-        vertex_code = new uint8_t[spirv_size];
-        memcpy(vertex_code, spirv, spirv_size);
-        vertex_code_size = spirv_size;
-
-        tsCompilerOutputDestroy(output);
-        tsCompilerOptionsDestroy(options);
-    }
-
-    uint8_t *fragment_code = NULL;
-    size_t fragment_code_size = 0;
-
-    // Compile fragment
-    {
-        TsCompilerOptions *options = tsCompilerOptionsCreate();
-        tsCompilerOptionsSetStage(options, TS_SHADER_STAGE_FRAGMENT);
-        tsCompilerOptionsSetEntryPoint(options, "pixel", strlen("pixel"));
-        tsCompilerOptionsSetSource(options, hlsl, hlsl_size, NULL, 0);
-
-        TsCompilerOutput *output = tsCompile(options);
-        const char *errors = tsCompilerOutputGetErrors(output);
-        if (errors)
-        {
-            printf("Shader compilation error:\n%s\n", errors);
-
-            tsCompilerOutputDestroy(output);
-            tsCompilerOptionsDestroy(options);
-            exit(1);
-        }
-
-        size_t spirv_size = 0;
-        const uint8_t *spirv = tsCompilerOutputGetSpirv(output, &spirv_size);
-
-        fragment_code = new uint8_t[spirv_size];
-        memcpy(fragment_code, spirv, spirv_size);
-        fragment_code_size = spirv_size;
-
-        tsCompilerOutputDestroy(output);
-        tsCompilerOptionsDestroy(options);
-    }
-
-    RgGraphicsPipelineInfo pipeline_info = {};
-    pipeline_info.polygon_mode = RG_POLYGON_MODE_FILL;
-    pipeline_info.cull_mode = RG_CULL_MODE_NONE;
-    pipeline_info.front_face = RG_FRONT_FACE_CLOCKWISE;
-    pipeline_info.topology = RG_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    pipeline_info.blend.enable = false;
-    pipeline_info.depth_stencil.test_enable = true;
-    pipeline_info.depth_stencil.write_enable = true;
-    pipeline_info.depth_stencil.bias_enable = false;
-    pipeline_info.depth_stencil.compare_op = RG_COMPARE_OP_GREATER;
-
-    pipeline_info.vertex = vertex_code;
-    pipeline_info.vertex_size = vertex_code_size;
-    pipeline_info.vertex_entry = "vertex";
-
-    pipeline_info.fragment = fragment_code;
-    pipeline_info.fragment_size = fragment_code_size;
-    pipeline_info.fragment_entry = "pixel";
-
-    const char *pragma = "#pragma";
-    size_t pragma_len = strlen(pragma);
-
-    for (size_t i = 0; i < hlsl_size; ++i)
-    {
-        size_t len = hlsl_size - i;
-        if (hlsl[i] == '#' && len > pragma_len && strncmp(&hlsl[i], pragma, pragma_len) == 0)
-        {
-            i += pragma_len;
-            while (isWhitespace(hlsl[i])) i++;
-
-            size_t key_start = i;
-            while (!isWhitespaceOrNewLine(hlsl[i])) i++;
-            size_t key_end = i;
-
-            while (isWhitespace(hlsl[i])) i++;
-
-            size_t value_start = i;
-            while (!isWhitespaceOrNewLine(hlsl[i])) i++;
-            size_t value_end = i;
-
-            const char *key = &hlsl[key_start];
-            size_t key_len = key_end - key_start;
-
-            const char *value = &hlsl[value_start];
-            size_t value_len = value_end - value_start;
-
-            bool success = true;
-            if (strncmp(key, "blend", key_len) == 0)
-            {
-                 success = stringToBool(value, value_len, &pipeline_info.blend.enable);
-            }
-            else if (strncmp(key, "depth_test", key_len) == 0)
-            {
-                 success = stringToBool(
-                         value, value_len, &pipeline_info.depth_stencil.test_enable);
-            }
-            else if (strncmp(key, "depth_write", key_len) == 0)
-            {
-                 success = stringToBool(
-                         value, value_len, &pipeline_info.depth_stencil.write_enable);
-            }
-            else if (strncmp(key, "depth_bias", key_len) == 0)
-            {
-                success = stringToBool(
-                        value, value_len, &pipeline_info.depth_stencil.bias_enable);
-            }
-            else if (strncmp(key, "depth_compare_op", key_len) == 0)
-            {
-                success = stringToCompareOp(
-                        value, value_len, &pipeline_info.depth_stencil.compare_op);
-            }
-            else if (strncmp(key, "topology", key_len) == 0)
-            {
-                 success = stringToTopology(value, value_len, &pipeline_info.topology);
-            }
-            else if (strncmp(key, "polygon_mode", key_len) == 0)
-            {
-                success = stringToPolygonMode(value, value_len, &pipeline_info.polygon_mode);
-            }
-            else if (strncmp(key, "cull_mode", key_len) == 0)
-            {
-                success = stringToCullMode(value, value_len, &pipeline_info.cull_mode);
-            }
-            else if (strncmp(key, "front_face", key_len) == 0)
-            {
-                success = stringToFrontFace(value, value_len, &pipeline_info.front_face);
-            }
-            else
-            {
-                success = false;
-            }
-
-            if (!success)
-            {
-                fprintf(stderr, "Warning: invalid pipeline parameter: '%.*s': '%.*s'\n",
-                        (int)key_len, key, (int)value_len, value);
-            }
-        }
-    }
-
-    RgPipeline *pipeline = rgExtGraphicsPipelineCreateInferredBindings(
-                platform->device,
-                true,
-                &pipeline_info);
-
-    delete[] vertex_code;
-    delete[] fragment_code;
-
-    return pipeline;
+    return platform->default_sampler;
 }
 
 // Event queue {{{
