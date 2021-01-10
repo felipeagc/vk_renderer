@@ -71,7 +71,7 @@ void UniformArenaReset(UniformArena *arena)
 void *UniformArenaUse(UniformArena *arena, uint32_t *offset, size_t size)
 {
     arena->offset = alignTo(arena->offset, arena->alignment);
-    *offset = arena->offset;
+    *offset = (uint32_t)arena->offset;
     arena->offset += size;
     assert(arena->offset <= arena->size);
     return arena->mapping + *offset;

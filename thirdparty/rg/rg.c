@@ -11,6 +11,8 @@
 
 #ifdef _WIN32
     #define VK_USE_PLATFORM_WIN32_KHR
+    #define WIN32_LEAN_AND_MEAN
+    #include <windows.h>
 #else
     #define VK_USE_PLATFORM_XLIB_KHR
 #endif
@@ -927,7 +929,7 @@ static inline size_t rgMemoryChunkSize(
     assert(index >= 0);
 
     // Tree level of the chunk starting from 0
-    size_t tree_level = floor(log2((double)(index+1)));
+    size_t tree_level = (size_t)floor(log2((double)(index+1)));
 
     // chunk_size = block->size / pow(2, tree_level);
     size_t chunk_size = block->size >> tree_level;
@@ -1214,7 +1216,7 @@ rgAllocatorCreateMemoryBlock(
     block->size = memblock_size;
     block->memory_type_index = (uint32_t)memory_type_index;
     block->type = info->type;
-    block->chunk_count = RG_MIN(2 * 256 - 1, 2 * memblock_size - 1);
+    block->chunk_count = (uint32_t)RG_MIN(2 * 256 - 1, 2 * memblock_size - 1);
     block->chunks = malloc(sizeof(*block->chunks) * block->chunk_count);
     memset(block->chunks, 0, sizeof(*block->chunks) * block->chunk_count);
 

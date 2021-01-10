@@ -5,7 +5,7 @@
 #include <string.h>
 
 #if defined(_MSC_VER)
-#define MATH_INLINE __forceinline inline
+#define MATH_INLINE __forceinline
 #elif defined(__clang__) || defined(__GNUC__)
 #define MATH_INLINE __attribute__((always_inline)) inline
 #else

@@ -207,7 +207,7 @@ Mesh *MeshCreateUVSphere(
     rgBufferUpload(device, cmd_pool, mesh->vertex_buffer, 0, vertices_size, vertices.ptr);
     rgBufferUpload(device, cmd_pool, mesh->index_buffer, 0, indices_size, indices.ptr);
 
-    mesh->index_count = indices.length;
+    mesh->index_count = (uint32_t)indices.length;
 
     indices.free();
     vertices.free();

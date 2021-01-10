@@ -2,18 +2,28 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <assert.h>
 #include <rg.h>
 #include "allocator.h"
 #include "platform.h"
+
+#if defined(_MSC_VER)
+#pragma warning(disable:4996)
+#endif
 
 #ifdef __linux__
 #include <unistd.h>
 #include <linux/limits.h>
 #endif
 
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
 static const char *getExeDirPath(Allocator *allocator)
 {
-#ifdef __linux__
+#if defined(__linux__)
     char buf[PATH_MAX];
     size_t buf_size = readlink("/proc/self/exe", buf, sizeof(buf));
 
@@ -33,6 +43,26 @@ static const char *getExeDirPath(Allocator *allocator)
     path[last_slash_pos] = '\0';
 
     return path;
+#elif defined(_WIN32)
+    char tmp_buf[MAX_PATH];
+    DWORD buf_size = GetModuleFileNameA(NULL, tmp_buf, sizeof(tmp_buf));
+    char *path = (char*)Allocate(allocator, buf_size+1);
+    GetModuleFileNameA(GetModuleHandle(NULL), path, buf_size+1);
+
+    size_t last_slash_pos = 0;
+    for (size_t i = 0; i < buf_size; ++i)
+    {
+        if (path[i] == '\\')
+        {
+            last_slash_pos = i;
+        }
+    }
+
+    path[last_slash_pos] = '\0';
+
+    return path;
+#else
+    #error unsupported system
 #endif
 }
 

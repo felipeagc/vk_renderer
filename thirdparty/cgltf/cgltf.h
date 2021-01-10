@@ -92,6 +92,10 @@
 #ifndef CGLTF_H_INCLUDED__
 #define CGLTF_H_INCLUDED__
 
+#if defined(_MSC_VER)
+#pragma warning(disable:4996)
+#endif
+
 #include <stddef.h>
 
 #ifdef __cplusplus

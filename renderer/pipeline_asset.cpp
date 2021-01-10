@@ -670,7 +670,7 @@ static void AnalyzeSpirv(
     for (uint32_t i = 0; i < module->attributes_count; ++i)
     {
         RgVertexAttribute *attrib = &module->attributes[i];
-        attrib->offset = offset;
+        attrib->offset = (uint32_t)offset;
 
         switch (attrib->format)
         {

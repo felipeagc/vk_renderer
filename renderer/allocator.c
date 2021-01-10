@@ -16,6 +16,10 @@ void *Reallocate(Allocator *allocator, void *ptr, size_t size)
 
 void Free(Allocator *allocator, void *ptr)
 {
-    if (!allocator) return free(ptr);
-    return allocator->free(allocator, ptr);
+    if (!allocator)
+    {
+        free(ptr);
+        return;
+    }
+    allocator->free(allocator, ptr);
 }

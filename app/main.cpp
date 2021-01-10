@@ -241,7 +241,7 @@ void AppRenderFrame(App *app)
 {
     Platform *platform = EngineGetPlatform(app->engine);
 
-    CameraUniform camera_uniform = FPSCameraUpdate(&app->camera, app->delta_time);
+    CameraUniform camera_uniform = FPSCameraUpdate(&app->camera, (float)app->delta_time);
 
     RgSwapchain *swapchain = PlatformGetSwapchain(platform);
     RgCmdBuffer *cmd_buffer = app->cmd_buffers[app->current_frame];
