@@ -20,6 +20,7 @@ typedef struct RgCmdBuffer RgCmdBuffer;
 typedef struct RgRenderPass RgRenderPass;
 typedef struct RgDescriptorSetLayout RgDescriptorSetLayout;
 typedef struct RgDescriptorSet RgDescriptorSet;
+typedef struct RgPipelineLayout RgPipelineLayout;
 typedef uint32_t RgFlags;
 
 typedef struct RgLimits
@@ -282,6 +283,12 @@ typedef struct RgDescriptorSetLayoutInfo
     uint32_t entry_count;
 } RgDescriptorSetLayoutInfo;
 
+typedef struct RgPipelineLayoutInfo
+{
+    RgDescriptorSetLayout **set_layouts;
+    uint32_t set_layout_count;
+} RgPipelineLayoutInfo;
+
 typedef struct RgDescriptorSetEntry
 {
     uint32_t binding;
@@ -377,8 +384,7 @@ typedef struct RgGraphicsPipelineInfo
     uint32_t           num_vertex_attributes;
     RgVertexAttribute *vertex_attributes;
 
-    RgDescriptorSetLayout **set_layouts;
-    uint32_t set_layout_count;
+    RgPipelineLayout *pipeline_layout;
 
     const uint8_t *vertex;
     size_t         vertex_size;
@@ -391,8 +397,7 @@ typedef struct RgGraphicsPipelineInfo
 
 typedef struct RgComputePipelineInfo
 {
-    RgDescriptorSetLayout *set_layouts;
-    uint32_t set_layout_count;
+    RgPipelineLayout *pipeline_layout;
 
     const uint8_t *code;
     size_t         code_size;
@@ -465,6 +470,10 @@ void rgRenderPassDestroy(RgDevice *device, RgRenderPass *render_pass);
 RgDescriptorSetLayout *rgDescriptorSetLayoutCreate(
         RgDevice *device, const RgDescriptorSetLayoutInfo *info);
 void rgDescriptorSetLayoutDestroy(RgDevice *device, RgDescriptorSetLayout *set_layout);
+
+RgPipelineLayout *rgPipelineLayoutCreate(
+        RgDevice *device, const RgPipelineLayoutInfo *info);
+void rgPipelineLayoutDestroy(RgDevice *device, RgPipelineLayout *pipeline_layout);
 
 RgDescriptorSet *rgDescriptorSetCreate(RgDevice *device, const RgDescriptorSetInfo *info);
 void rgDescriptorSetDestroy(RgDevice *device, RgDescriptorSet *descriptor_set);

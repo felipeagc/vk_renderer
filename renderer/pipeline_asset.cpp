@@ -60,9 +60,6 @@ struct PipelineAsset
     Allocator *allocator;
     Engine *engine;
     RgPipeline *pipeline;
-
-    uint32_t set_layout_count;
-    RgDescriptorSetLayout **set_layouts;
 };
 
 static void AnalyzeSpirv(
@@ -144,6 +141,7 @@ static bool stringToCompareOp(const char *str, size_t len, RgCompareOp *value)
 PipelineAsset *PipelineAssetCreateGraphics(
         Allocator *allocator,
         Engine *engine,
+        PipelineType type,
         const char *hlsl,
         size_t hlsl_size)
 {
@@ -329,74 +327,11 @@ PipelineAsset *PipelineAssetCreateGraphics(
         vertex_code_size / 4,
         &vertex_module);
 
-    ModuleInfo fragment_module = {};
-    AnalyzeSpirv(
-        RG_SHADER_STAGE_FRAGMENT,
-        true,
-        (uint32_t *)fragment_code,
-        fragment_code_size / 4,
-        &fragment_module);
-
-    ModuleInfo *modules[] = {
-        &vertex_module,
-        &fragment_module,
-    };
-    uint32_t module_count = sizeof(modules) / sizeof(modules[0]);
-
-    pipeline_asset->set_layout_count =
-        max(vertex_module.sets_count, fragment_module.sets_count);
-    pipeline_asset->set_layouts = (RgDescriptorSetLayout**)
-        Allocate(allocator, sizeof(RgDescriptorSetLayout*) * pipeline_asset->set_layout_count);
-
-    for (uint32_t i = 0; i < pipeline_asset->set_layout_count; ++i)
-    {
-        uint32_t binding_count = 0;
-        for (uint32_t m = 0; m < module_count; ++m)
-        {
-            ModuleInfo *module = modules[m];
-            if (i < module->sets_count)
-            {
-                binding_count = max(binding_count, module->sets[i].bindings_count);
-            }
-        }
-
-        RgDescriptorSetLayoutEntry *entries = (RgDescriptorSetLayoutEntry*)
-            Allocate(allocator, sizeof(RgDescriptorSetLayoutEntry) * binding_count);
-        memset(entries, 0, sizeof(*entries) * binding_count);
-
-        for (uint32_t m = 0; m < module_count; ++m)
-        {
-            ModuleInfo *module = modules[m];
-            if (i < module->sets_count)
-            {
-                uint32_t module_binding_count = module->sets[i].bindings_count;
-                for (uint32_t b = 0; b < module_binding_count; ++b)
-                {
-                    if (module->sets[i].bindings[b] != 0)
-                    {
-                        entries[b].type = module->sets[i].bindings[b];
-                        entries[b].binding = b;
-                        entries[b].count = 1;
-                        entries[b].shader_stages |= module->stage;
-                    }
-                }
-            }
-        }
-
-        RgDescriptorSetLayoutInfo info = {};
-        info.entries = entries;
-        info.entry_count = binding_count;
-        pipeline_asset->set_layouts[i] = rgDescriptorSetLayoutCreate(device, &info);
-
-        Free(allocator, entries);
-    }
-
     pipeline_info.vertex_stride = vertex_module.vertex_stride;
     pipeline_info.num_vertex_attributes = vertex_module.attributes_count;
     pipeline_info.vertex_attributes = vertex_module.attributes;
 
-    pipeline_info.set_layouts = pipeline_asset->set_layouts;
-    pipeline_info.set_layout_count = pipeline_asset->set_layout_count;
+    pipeline_info.pipeline_layout = EngineGetPipelineLayout(engine, type);
 
     pipeline_asset->pipeline = rgGraphicsPipelineCreate(
                 device,
@@ -413,27 +348,14 @@ void PipelineAssetDestroy(PipelineAsset *pipeline_asset)
     Platform *platform = EngineGetPlatform(pipeline_asset->engine);
     RgDevice *device = PlatformGetDevice(platform);
 
-    for (uint32_t i = 0; i < pipeline_asset->set_layout_count; ++i)
-    {
-        rgDescriptorSetLayoutDestroy(device, pipeline_asset->set_layouts[i]);
-    }
-
     rgPipelineDestroy(device, pipeline_asset->pipeline);
 
-    Free(pipeline_asset->allocator, pipeline_asset->set_layouts);
     Free(pipeline_asset->allocator, pipeline_asset);
 }
 
 RgPipeline *PipelineAssetGetPipeline(PipelineAsset *pipeline_asset)
 {
     return pipeline_asset->pipeline;
-}
-
-RgDescriptorSetLayout *PipelineAssetGetSetLayout(
-        PipelineAsset *pipeline_asset,
-        uint32_t index)
-{
-    return pipeline_asset->set_layouts[index];
 }
 
 static void AnalyzeSpirv(

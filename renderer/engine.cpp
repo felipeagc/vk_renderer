@@ -79,6 +79,7 @@ struct Engine
     RgSampler *default_sampler;
 
     RgDescriptorSetLayout *bind_group_layouts[BIND_GROUP_MAX];
+    RgPipelineLayout *pipeline_layouts[PIPELINE_TYPE_MAX];
 };
 
 Engine *EngineCreate(Allocator *allocator)
@@ -92,6 +93,10 @@ Engine *EngineCreate(Allocator *allocator)
     engine->exe_dir = getExeDirPath(allocator);
 
     RgDevice *device = PlatformGetDevice(engine->platform);
+
+    //
+    // Create descriptor set layouts
+    //
 
     {
         RgDescriptorSetLayoutEntry entries[] = {
@@ -172,6 +177,59 @@ Engine *EngineCreate(Allocator *allocator)
             rgDescriptorSetLayoutCreate(device, &info);
     }
 
+    {
+        RgDescriptorSetLayoutEntry entries[] = {
+            {
+                .binding = 0,
+                .type = RG_DESCRIPTOR_IMAGE,
+                .shader_stages = RG_SHADER_STAGE_FRAGMENT,
+                .count = 1,
+            },
+            {
+                .binding = 1,
+                .type = RG_DESCRIPTOR_SAMPLER,
+                .shader_stages = RG_SHADER_STAGE_FRAGMENT,
+                .count = 1,
+            },
+        };
+
+        RgDescriptorSetLayoutInfo info = {};
+        info.entries = entries;
+        info.entry_count = sizeof(entries) / sizeof(entries[0]);
+
+        engine->bind_group_layouts[BIND_GROUP_POSTPROCESS] =
+            rgDescriptorSetLayoutCreate(device, &info);
+    }
+
+    //
+    // Create pipeline layouts
+    //
+
+    {
+        RgDescriptorSetLayout *set_layouts[] = {
+            engine->bind_group_layouts[BIND_GROUP_CAMERA],
+            engine->bind_group_layouts[BIND_GROUP_MODEL],
+        };
+        RgPipelineLayoutInfo pipeline_layout_info = {};
+        pipeline_layout_info.set_layouts = set_layouts;
+        pipeline_layout_info.set_layout_count = sizeof(set_layouts) / sizeof(set_layouts[0]);
+
+        engine->pipeline_layouts[PIPELINE_TYPE_MODEL] =
+            rgPipelineLayoutCreate(device, &pipeline_layout_info);
+    }
+
+    {
+        RgDescriptorSetLayout *set_layouts[] = {
+            engine->bind_group_layouts[BIND_GROUP_POSTPROCESS],
+        };
+        RgPipelineLayoutInfo pipeline_layout_info = {};
+        pipeline_layout_info.set_layouts = set_layouts;
+        pipeline_layout_info.set_layout_count = sizeof(set_layouts) / sizeof(set_layouts[0]);
+
+        engine->pipeline_layouts[PIPELINE_TYPE_POSTPROCESS] =
+            rgPipelineLayoutCreate(device, &pipeline_layout_info);
+    }
+
     engine->transfer_cmd_pool = rgCmdPoolCreate(device, RG_QUEUE_TYPE_TRANSFER);
 
     RgImageInfo image_info = {};
@@ -226,6 +284,11 @@ void EngineDestroy(Engine *engine)
 {
     RgDevice *device = PlatformGetDevice(engine->platform);
 
+    for (uint32_t i = 0; i < PIPELINE_TYPE_MAX; ++i)
+    {
+        rgPipelineLayoutDestroy(device, engine->pipeline_layouts[i]);
+    }
+
     for (uint32_t i = 0; i < BIND_GROUP_MAX; ++i)
     {
         rgDescriptorSetLayoutDestroy(device, engine->bind_group_layouts[i]);
@@ -250,6 +313,11 @@ Platform *EngineGetPlatform(Engine *engine)
 RgDescriptorSetLayout *EngineGetSetLayout(Engine *engine, BindGroupType type)
 {
     return engine->bind_group_layouts[type];
+}
+
+RgPipelineLayout *EngineGetPipelineLayout(Engine *engine, PipelineType type)
+{
+    return engine->pipeline_layouts[type];
 }
 
 const char *EngineGetExeDir(Engine *engine)

@@ -77,7 +77,11 @@ App *AppCreate()
             EngineLoadFileRelative(app->engine, "../shaders/color.hlsl", &hlsl_size);
         assert(hlsl);
         app->offscreen_pipeline = PipelineAssetCreateGraphics(
-                NULL, app->engine, hlsl, hlsl_size);
+                NULL,
+                app->engine,
+                PIPELINE_TYPE_MODEL,
+                hlsl,
+                hlsl_size);
         delete[] hlsl;
     }
 
@@ -90,7 +94,11 @@ App *AppCreate()
             EngineLoadFileRelative(app->engine, "../shaders/post.hlsl", &hlsl_size);
         assert(hlsl);
         app->backbuffer_pipeline = PipelineAssetCreateGraphics(
-                NULL, app->engine, hlsl, hlsl_size);
+                NULL,
+                app->engine,
+                PIPELINE_TYPE_POSTPROCESS,
+                hlsl,
+                hlsl_size);
         delete[] hlsl;
     }
 
@@ -228,7 +236,7 @@ void AppResize(App *app)
         entries[1].sampler = app->sampler;
 
         RgDescriptorSetInfo info = {
-            PipelineAssetGetSetLayout(app->backbuffer_pipeline, 0), // layout
+            EngineGetSetLayout(app->engine, BIND_GROUP_POSTPROCESS),
             entries, // entries
             sizeof(entries) / sizeof(entries[0]), // entry_count
         };
@@ -268,12 +276,6 @@ void AppRenderFrame(App *app)
 
     Mat4 transform = Mat4Diagonal(1.0f);
     ModelAssetRender(app->model_asset, cmd_buffer, &transform);
-    /* rgCmdBindVertexBuffer( */
-    /*         cmd_buffer, MeshGetVertexBuffer(app->cube_mesh), 0); */
-    /* rgCmdBindIndexBuffer( */
-    /*         cmd_buffer, MeshGetIndexBuffer(app->cube_mesh), 0, RG_INDEX_TYPE_UINT32); */
-
-    /* rgCmdDrawIndexed(cmd_buffer, MeshGetIndexCount(app->cube_mesh), 1, 0, 0, 0); */
 
     // Backbuffer pass
 
@@ -333,6 +335,8 @@ void AppRun(App *app)
                 }
                 break;
             }
+
+            default: break;
             }
         }
 

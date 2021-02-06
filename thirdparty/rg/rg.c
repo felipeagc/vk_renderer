@@ -308,6 +308,11 @@ struct RgDescriptorSetLayout
     ARRAY_OF(RgDescriptorSetPool *) pools;
 };
 
+struct RgPipelineLayout
+{
+    VkPipelineLayout pipeline_layout;
+};
+
 typedef enum RgPipelineType
 {
     RG_PIPELINE_TYPE_GRAPHICS,
@@ -318,8 +323,7 @@ struct RgPipeline
 {
     RgDevice *device;
     RgPipelineType type;
-
-    VkPipelineLayout pipeline_layout;
+    RgPipelineLayout *layout;
 
     union
     {
@@ -3291,6 +3295,45 @@ void rgDescriptorSetLayoutDestroy(
 }
 // }}}
 
+
+// Pipeline layout {{{
+RgPipelineLayout *rgPipelineLayoutCreate(
+        RgDevice *device, const RgPipelineLayoutInfo *info)
+{
+    RgPipelineLayout *pipeline_layout = malloc(sizeof(*pipeline_layout));
+    memset(pipeline_layout, 0, sizeof(*pipeline_layout));
+
+    VkDescriptorSetLayout *vk_set_layouts =
+        malloc(sizeof(*vk_set_layouts) * info->set_layout_count);
+
+    for (uint32_t i = 0; i < info->set_layout_count; ++i)
+    {
+        vk_set_layouts[i] = info->set_layouts[i]->set_layout;
+    }
+
+    VkPipelineLayoutCreateInfo pipeline_layout_info;
+    memset(&pipeline_layout_info, 0, sizeof(pipeline_layout_info));
+    pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipeline_layout_info.setLayoutCount = info->set_layout_count;
+    pipeline_layout_info.pSetLayouts = vk_set_layouts;
+    pipeline_layout_info.pushConstantRangeCount = 0;
+    pipeline_layout_info.pPushConstantRanges = NULL;
+
+    VK_CHECK(vkCreatePipelineLayout(
+        device->device, &pipeline_layout_info, NULL, &pipeline_layout->pipeline_layout));
+
+    free(vk_set_layouts);
+
+    return pipeline_layout;
+}
+
+void rgPipelineLayoutDestroy(RgDevice *device, RgPipelineLayout *pipeline_layout)
+{
+    vkDestroyPipelineLayout(device->device, pipeline_layout->pipeline_layout, NULL);
+    free(pipeline_layout);
+}
+// }}}
+
 // Descriptor set {{{
 RgDescriptorSet *rgDescriptorSetCreate(RgDevice *device, const RgDescriptorSetInfo *info)
 {
@@ -3398,6 +3441,7 @@ RgPipeline *rgGraphicsPipelineCreate(RgDevice *device, const RgGraphicsPipelineI
 
     pipeline->device = device;
     pipeline->type = RG_PIPELINE_TYPE_GRAPHICS;
+    pipeline->layout = info->pipeline_layout;
 
     pipeline->graphics.polygon_mode = info->polygon_mode;
     pipeline->graphics.cull_mode = info->cull_mode;
@@ -3437,27 +3481,6 @@ RgPipeline *rgGraphicsPipelineCreate(RgDevice *device, const RgGraphicsPipelineI
     //
     // Create pipeline layout
     //
-
-    VkDescriptorSetLayout *vk_set_layouts =
-        malloc(sizeof(*vk_set_layouts) * info->set_layout_count);
-
-    for (uint32_t i = 0; i < info->set_layout_count; ++i)
-    {
-        vk_set_layouts[i] = info->set_layouts[i]->set_layout;
-    }
-
-    VkPipelineLayoutCreateInfo pipeline_layout_info;
-    memset(&pipeline_layout_info, 0, sizeof(pipeline_layout_info));
-    pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipeline_layout_info.setLayoutCount = info->set_layout_count;
-    pipeline_layout_info.pSetLayouts = vk_set_layouts;
-    pipeline_layout_info.pushConstantRangeCount = 0;
-    pipeline_layout_info.pPushConstantRanges = NULL;
-
-    VK_CHECK(vkCreatePipelineLayout(
-        device->device, &pipeline_layout_info, NULL, &pipeline->pipeline_layout));
-
-    free(vk_set_layouts);
 
     if (info->vertex && info->vertex_size > 0)
     {
@@ -3499,33 +3522,13 @@ RgPipeline *rgComputePipelineCreate(RgDevice *device, const RgComputePipelineInf
 
     pipeline->device = device;
     pipeline->type = RG_PIPELINE_TYPE_COMPUTE;
+    pipeline->layout = info->pipeline_layout;
 
     assert(info->code && info->code_size > 0);
 
     //
     // Create pipeline layout
     //
-
-    VkDescriptorSetLayout *vk_set_layouts =
-        malloc(sizeof(*vk_set_layouts) * info->set_layout_count);
-
-    for (uint32_t i = 0; i < info->set_layout_count; ++i)
-    {
-        vk_set_layouts[i] = info->set_layouts[i].set_layout;
-    }
-
-    VkPipelineLayoutCreateInfo pipeline_layout_info;
-    memset(&pipeline_layout_info, 0, sizeof(pipeline_layout_info));
-    pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipeline_layout_info.setLayoutCount = info->set_layout_count;
-    pipeline_layout_info.pSetLayouts = vk_set_layouts;
-    pipeline_layout_info.pushConstantRangeCount = 0;
-    pipeline_layout_info.pPushConstantRanges = NULL;
-
-    VK_CHECK(vkCreatePipelineLayout(
-        device->device, &pipeline_layout_info, NULL, &pipeline->pipeline_layout));
-
-    free(vk_set_layouts);
 
     VkShaderModuleCreateInfo module_create_info;
     memset(&module_create_info, 0, sizeof(module_create_info));
@@ -3549,7 +3552,7 @@ RgPipeline *rgComputePipelineCreate(RgDevice *device, const RgComputePipelineInf
 
     pipeline_create_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
     pipeline_create_info.stage = stage_create_info;
-    pipeline_create_info.layout = pipeline->pipeline_layout;
+    pipeline_create_info.layout = pipeline->layout->pipeline_layout;
 
     vkCreateComputePipelines(
         device->device,
@@ -3565,8 +3568,6 @@ RgPipeline *rgComputePipelineCreate(RgDevice *device, const RgComputePipelineInf
 void rgPipelineDestroy(RgDevice *device, RgPipeline *pipeline)
 {
     VK_CHECK(vkDeviceWaitIdle(device->device));
-
-    vkDestroyPipelineLayout(device->device, pipeline->pipeline_layout, NULL);
 
     switch (pipeline->type)
     {
@@ -3820,7 +3821,7 @@ static VkPipeline rgGraphicsPipelineGetInstance(
     pipeline_info.pDepthStencilState = &depth_stencil;
     pipeline_info.pColorBlendState = &color_blending;
     pipeline_info.pDynamicState = &dynamic_state;
-    pipeline_info.layout = pipeline->pipeline_layout;
+    pipeline_info.layout = pipeline->layout->pipeline_layout;
     pipeline_info.renderPass = render_pass->render_pass;
     pipeline_info.subpass = 0;
     pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
@@ -4051,7 +4052,7 @@ void rgCmdBindDescriptorSet(
     vkCmdBindDescriptorSets(
         cmd_buffer->cmd_buffer,
         cmd_buffer->current_bind_point,
-        cmd_buffer->current_pipeline->pipeline_layout,
+        cmd_buffer->current_pipeline->layout->pipeline_layout,
         index,
         1,
         &set->set,
