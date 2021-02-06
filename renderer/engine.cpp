@@ -97,8 +97,10 @@ Engine *EngineCreate(Allocator *allocator)
     RgDevice *device = PlatformGetDevice(engine->platform);
 
     {
+        Arena *arena = ArenaCreate(NULL, 1 << 13);
+
         // Test lexer
-        StringMap<int> map = StringMap<int>::create(NULL);
+        StringMap<int> map = StringMap<int>::create(ArenaGetAllocator(arena));
         map.set("hello", 123);
         map.set("hello2", 321);
         map.set("hello3", 456);
@@ -130,6 +132,7 @@ Engine *EngineCreate(Allocator *allocator)
 
         Free(NULL, (void*)text);
         map.free();
+        ArenaDestroy(arena);
     }
 
     //
