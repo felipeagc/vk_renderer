@@ -7,6 +7,7 @@
 #include "allocator.h"
 #include "platform.h"
 #include "lexer.h"
+#include "string_map.hpp"
 
 #if defined(_MSC_VER)
 #pragma warning(disable:4996)
@@ -97,6 +98,16 @@ Engine *EngineCreate(Allocator *allocator)
 
     {
         // Test lexer
+        StringMap<int> map = StringMap<int>::create(NULL);
+        map.set("hello", 123);
+        map.set("hello2", 321);
+        map.set("hello3", 456);
+
+        for (auto &slot : map)
+        {
+            printf("%s = %d\n", slot.key, slot.value);
+        }
+
         size_t text_size = 0;
         const char *text = (const char *)
             EngineLoadFileRelative(engine, NULL, "../spec.json", &text_size);
@@ -118,6 +129,7 @@ Engine *EngineCreate(Allocator *allocator)
         }
 
         Free(NULL, (void*)text);
+        map.free();
     }
 
     //

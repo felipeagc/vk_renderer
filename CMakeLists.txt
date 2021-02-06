@@ -14,6 +14,7 @@ add_library(
   renderer/format.cpp
   renderer/lexer.h
   renderer/lexer.cpp
+  renderer/string_map.hpp
 
   renderer/engine.h
   renderer/engine.cpp
