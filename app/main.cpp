@@ -74,7 +74,7 @@ App *AppCreate()
     {
         size_t hlsl_size = 0;
         const char *hlsl = (const char*)
-            EngineLoadFileRelative(app->engine, "../shaders/color.hlsl", &hlsl_size);
+            EngineLoadFileRelative(app->engine, NULL, "../shaders/color.hlsl", &hlsl_size);
         assert(hlsl);
         app->offscreen_pipeline = PipelineAssetCreateGraphics(
                 NULL,
@@ -82,7 +82,7 @@ App *AppCreate()
                 PIPELINE_TYPE_MODEL,
                 hlsl,
                 hlsl_size);
-        delete[] hlsl;
+        Free(NULL, (void*)hlsl);
     }
 
     //
@@ -91,7 +91,7 @@ App *AppCreate()
     {
         size_t hlsl_size = 0;
         const char *hlsl = (const char*)
-            EngineLoadFileRelative(app->engine, "../shaders/post.hlsl", &hlsl_size);
+            EngineLoadFileRelative(app->engine, NULL, "../shaders/post.hlsl", &hlsl_size);
         assert(hlsl);
         app->backbuffer_pipeline = PipelineAssetCreateGraphics(
                 NULL,
@@ -99,7 +99,7 @@ App *AppCreate()
                 PIPELINE_TYPE_POSTPROCESS,
                 hlsl,
                 hlsl_size);
-        delete[] hlsl;
+        Free(NULL, (void*)hlsl);
     }
 
     app->cmd_pool = rgCmdPoolCreate(device, RG_QUEUE_TYPE_GRAPHICS);

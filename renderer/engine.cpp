@@ -6,6 +6,7 @@
 #include <rg.h>
 #include "allocator.h"
 #include "platform.h"
+#include "lexer.h"
 
 #if defined(_MSC_VER)
 #pragma warning(disable:4996)
@@ -93,6 +94,31 @@ Engine *EngineCreate(Allocator *allocator)
     engine->exe_dir = getExeDirPath(allocator);
 
     RgDevice *device = PlatformGetDevice(engine->platform);
+
+    {
+        // Test lexer
+        size_t text_size = 0;
+        const char *text = (const char *)
+            EngineLoadFileRelative(engine, NULL, "../spec.json", &text_size);
+
+        Token token = {};
+
+        TokenizerState state = NewTokenizerState(text, text_size);
+        while (1)
+        {
+            state = NextToken(NULL, state, &token);
+            if (token.type == TOKEN_EOF) break;
+
+            if (token.type == TOKEN_ERROR)
+            {
+                fprintf(stderr, "Error at position: %zu: %.*s\n",
+                        token.pos, (int)token.str_length, token.str);
+                break;
+            }
+        }
+
+        Free(NULL, (void*)text);
+    }
 
     //
     // Create descriptor set layouts
@@ -325,10 +351,11 @@ const char *EngineGetExeDir(Engine *engine)
     return engine->exe_dir;
 }
 
-uint8_t *EngineLoadFileRelative(Engine *engine, const char *relative_path, size_t *size)
+uint8_t *EngineLoadFileRelative(
+    Engine *engine, Allocator *allocator, const char *relative_path, size_t *size)
 {
     size_t path_size = strlen(engine->exe_dir) + 1 + strlen(relative_path) + 1;
-    char *path = new char[path_size];
+    char *path = (char*)Allocate(allocator, path_size);
     snprintf(path, path_size, "%s/%s", engine->exe_dir, relative_path);
     path[path_size-1] = '\0';
 
@@ -339,12 +366,12 @@ uint8_t *EngineLoadFileRelative(Engine *engine, const char *relative_path, size_
     *size = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    uint8_t *data = new uint8_t[*size];
+    uint8_t *data = (uint8_t*)Allocate(allocator, *size);
     fread(data, *size, 1, f);
 
     fclose(f);
 
-    delete[] path;
+    Free(allocator, path);
 
     return data;
 }

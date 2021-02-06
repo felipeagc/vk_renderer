@@ -10,6 +10,10 @@ add_library(
   renderer/math.h
   renderer/allocator.h
   renderer/allocator.c
+  renderer/format.h
+  renderer/format.cpp
+  renderer/lexer.h
+  renderer/lexer.cpp
 
   renderer/engine.h
   renderer/engine.cpp

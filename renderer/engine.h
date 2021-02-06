@@ -38,8 +38,9 @@ EngineGetPipelineLayout(Engine *engine, PipelineType type);
 
 const char *EngineGetExeDir(Engine *engine);
 
+// Loads a file relative to the executable path
 uint8_t *
-EngineLoadFileRelative(Engine *engine, const char *relative_path, size_t *size);
+EngineLoadFileRelative(Engine *engine, Allocator *allocator, const char *relative_path, size_t *size);
 
 RgImage *EngineGetWhiteImage(Engine *engine);
 RgImage *EngineGetBlackImage(Engine *engine);
