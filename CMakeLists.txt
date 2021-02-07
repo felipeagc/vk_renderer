@@ -6,7 +6,7 @@ add_library(
 
   renderer/platform.h
   renderer/platform.cpp
-  renderer/array.h
+  renderer/array.hpp
   renderer/math.h
   renderer/allocator.h
   renderer/allocator.c
@@ -15,6 +15,10 @@ add_library(
   renderer/lexer.h
   renderer/lexer.cpp
   renderer/string_map.hpp
+  renderer/config.h
+  renderer/config.cpp
+  renderer/string_builder.h
+  renderer/string_builder.cpp
 
   renderer/engine.h
   renderer/engine.cpp

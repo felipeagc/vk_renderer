@@ -1,6 +1,8 @@
 #pragma once
 
 #include <stdint.h>
+#include <string.h>
+#include "allocator.h"
 
 static inline uint64_t StringMapHash(const char *string)
 {
@@ -55,7 +57,7 @@ struct StringMap
 
     void grow();
 
-    static inline StringMap create(Allocator *allocator, uint64_t size= 16)
+    static inline StringMap create(Allocator *allocator, uint64_t size = 16)
     {
         StringMap map = {};
         map.allocator = allocator;
@@ -147,6 +149,17 @@ struct StringMap
 
         this->slots[i].hash = 0;
         this->slots[i].key = nullptr;
+    }
+
+    size_t length()
+    {
+        size_t count = 0;
+        for (auto &slot : this)
+        {
+            (void)slot;
+            count++;
+        }
+        return count;
     }
 
     void free()

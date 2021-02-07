@@ -3,7 +3,7 @@
 #include "allocator.h"
 #include "platform.h"
 #include "engine.h"
-#include "array.h"
+#include "array.hpp"
 
 struct Mesh
 {
@@ -92,8 +92,8 @@ Mesh *MeshCreateUVSphere(
 
     Platform *platform = EngineGetPlatform(engine);
 
-    Array<Vertex> vertices = Array<Vertex>::with_allocator(allocator);
-    Array<uint32_t> indices = Array<uint32_t>::with_allocator(allocator);
+    Array<Vertex> vertices = Array<Vertex>::create(allocator);
+    Array<uint32_t> indices = Array<uint32_t>::create(allocator);
 
     float step = 1.0f / (float)divisions;
     Vec3 step3 = V3(step, step, step);

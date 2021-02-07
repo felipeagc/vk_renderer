@@ -16,7 +16,7 @@ struct Array
         return this->ptr[index];
     }
 
-    static inline Array with_allocator(Allocator *allocator)
+    static inline Array create(Allocator *allocator)
     {
         Array array = {};
         array.allocator = allocator;

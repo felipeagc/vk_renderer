@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+#include "allocator.h"
 #include "format.h"
 
 static inline int64_t LengthLeft(TokenizerState state, size_t offset)
@@ -81,14 +82,12 @@ TokenizerState NextToken(Allocator *allocator, TokenizerState state, Token *toke
         else
         {
             token->type = TOKEN_ERROR;
-            token->str = "unclosed string";
-            token->str_length = strlen(token->str);
+            token->str = Strdup(allocator, "unclosed string");
             break;
         }
 
         token->type = TOKEN_STRING;
-        token->str = string;
-        token->str_length = content_length;
+        token->str = NullTerminate(allocator, string, content_length);
 
         break;
     }
@@ -118,15 +117,13 @@ TokenizerState NextToken(Allocator *allocator, TokenizerState state, Token *toke
             }
 
             token->type = TOKEN_IDENT;
-            token->str = &state.text[state.pos];
-            token->str_length = ident_length;
+            token->str = NullTerminate(allocator, &state.text[state.pos], ident_length);
             state.pos += ident_length;
         }
         else
         {
             token->type = TOKEN_ERROR;
             token->str = Sprintf(allocator, "unknown token: '%c'", state.text[state.pos]);
-            token->str_length = strlen(token->str);
             state.pos++;
         }
         break;

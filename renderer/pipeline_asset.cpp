@@ -11,7 +11,7 @@
 #include "platform.h"
 #include "engine.h"
 #include "math.h"
-#include "array.h"
+#include "array.hpp"
 
 enum {
     MAX_SETS = 16,

@@ -26,6 +26,9 @@ Allocator *ArenaGetAllocator(Arena *arena);
 void ArenaReset(Arena *arena);
 void ArenaDestroy(Arena *arena);
 
+const char *Strdup(Allocator *allocator, const char *str);
+const char *NullTerminate(Allocator *allocator, const char *str, size_t length);
+
 #ifdef __cplusplus
 }
 #endif

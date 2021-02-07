@@ -8,6 +8,7 @@
 #include "platform.h"
 #include "lexer.h"
 #include "string_map.hpp"
+#include "config.h"
 
 #if defined(_MSC_VER)
 #pragma warning(disable:4996)
@@ -97,42 +98,20 @@ Engine *EngineCreate(Allocator *allocator)
     RgDevice *device = PlatformGetDevice(engine->platform);
 
     {
-        Arena *arena = ArenaCreate(NULL, 1 << 13);
-
-        // Test lexer
-        StringMap<int> map = StringMap<int>::create(ArenaGetAllocator(arena));
-        map.set("hello", 123);
-        map.set("hello2", 321);
-        map.set("hello3", 456);
-
-        for (auto &slot : map)
-        {
-            printf("%s = %d\n", slot.key, slot.value);
-        }
-
         size_t text_size = 0;
         const char *text = (const char *)
             EngineLoadFileRelative(engine, NULL, "../spec.json", &text_size);
 
-        Token token = {};
-
-        TokenizerState state = NewTokenizerState(text, text_size);
-        while (1)
+        Config *config = ConfigParse(NULL, text, text_size);
+        if (config)
         {
-            state = NextToken(NULL, state, &token);
-            if (token.type == TOKEN_EOF) break;
-
-            if (token.type == TOKEN_ERROR)
-            {
-                fprintf(stderr, "Error at position: %zu: %.*s\n",
-                        token.pos, (int)token.str_length, token.str);
-                break;
-            }
+            const char *config_str = ConfigSprint(config, NULL);
+            printf("%s\n", config_str);
+            Free(NULL, (void*)config_str);
+            ConfigFree(config);
         }
 
         Free(NULL, (void*)text);
-        map.free();
-        ArenaDestroy(arena);
     }
 
     //

@@ -3,7 +3,7 @@
 #include <assert.h>
 #include <rg.h>
 #include "math.h"
-#include "array.h"
+#include "array.hpp"
 #include "allocator.h"
 #include "platform.h"
 #include "engine.h"
@@ -157,12 +157,12 @@ ModelAsset *ModelAssetFromMesh(
     model->vertex_buffer = MeshGetVertexBuffer(mesh);
     model->index_buffer = MeshGetIndexBuffer(mesh);
 
-    model->nodes = Array<Node>::with_allocator(allocator);
-    model->root_nodes = Array<uint32_t>::with_allocator(allocator);
-    model->meshes = Array<ModelMesh>::with_allocator(allocator);
-    model->materials = Array<Material>::with_allocator(allocator);
-    model->images = Array<RgImage*>::with_allocator(allocator);
-    model->samplers = Array<RgSampler*>::with_allocator(allocator);
+    model->nodes = Array<Node>::create(allocator);
+    model->root_nodes = Array<uint32_t>::create(allocator);
+    model->meshes = Array<ModelMesh>::create(allocator);
+    model->materials = Array<Material>::create(allocator);
+    model->images = Array<RgImage*>::create(allocator);
+    model->samplers = Array<RgSampler*>::create(allocator);
 
     model->materials.push_back(MaterialDefault(engine));
 
@@ -174,7 +174,7 @@ ModelAsset *ModelAssetFromMesh(
     primitive.is_normal_mapped = false;
 
     ModelMesh model_mesh = {};
-    model_mesh.primitives = Array<Primitive>::with_allocator(allocator);
+    model_mesh.primitives = Array<Primitive>::create(allocator);
     model_mesh.primitives.push_back(primitive);
 
     model->meshes.push_back(model_mesh);

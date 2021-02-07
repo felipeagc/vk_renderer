@@ -108,3 +108,20 @@ void ArenaDestroy(Arena *arena)
     Free(arena->parent_allocator, arena->data);
     Free(arena->parent_allocator, arena);
 }
+
+const char *Strdup(Allocator *allocator, const char *str)
+{
+    size_t length = strlen(str);
+    char *new_str = (char*)Allocate(allocator, length+1);
+    memcpy(new_str, str, length);
+    new_str[length] = '\0';
+    return new_str;
+}
+
+const char *NullTerminate(Allocator *allocator, const char *str, size_t length)
+{
+    char *new_str = (char*)Allocate(allocator, length+1);
+    memcpy(new_str, str, length);
+    new_str[length] = '\0';
+    return new_str;
+}

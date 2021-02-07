@@ -6,7 +6,7 @@ typedef struct Allocator Allocator;
 
 typedef enum TokenType
 {
-    TOKEN_ERROR,
+    TOKEN_ERROR = 0,
     TOKEN_LCURLY,
     TOKEN_RCURLY,
     TOKEN_LBRACKET,
@@ -26,9 +26,7 @@ typedef struct Token
 {
     TokenType type;
     size_t pos;
-
     const char *str;
-    size_t str_length;
 } Token;
 
 typedef struct TokenizerState
