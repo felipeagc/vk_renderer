@@ -79,7 +79,7 @@ App *AppCreate()
         app->offscreen_pipeline = PipelineAssetCreateGraphics(
                 NULL,
                 app->engine,
-                PIPELINE_TYPE_MODEL,
+                "standard",
                 hlsl,
                 hlsl_size);
         Free(NULL, (void*)hlsl);
@@ -96,7 +96,7 @@ App *AppCreate()
         app->backbuffer_pipeline = PipelineAssetCreateGraphics(
                 NULL,
                 app->engine,
-                PIPELINE_TYPE_POSTPROCESS,
+                "postprocess",
                 hlsl,
                 hlsl_size);
         Free(NULL, (void*)hlsl);
@@ -213,7 +213,7 @@ void AppResize(App *app)
         entries[0].buffer = UniformArenaGetBuffer(app->uniform_arena);
 
         RgDescriptorSetInfo info = {
-            EngineGetSetLayout(app->engine, BIND_GROUP_CAMERA), // layout
+            EngineGetSetLayout(app->engine, "camera"), // layout
             entries, // entries
             sizeof(entries) / sizeof(entries[0]), // entry_count
         };
@@ -236,7 +236,7 @@ void AppResize(App *app)
         entries[1].sampler = app->sampler;
 
         RgDescriptorSetInfo info = {
-            EngineGetSetLayout(app->engine, BIND_GROUP_POSTPROCESS),
+            EngineGetSetLayout(app->engine, "postprocess"),
             entries, // entries
             sizeof(entries) / sizeof(entries[0]), // entry_count
         };

@@ -132,3 +132,17 @@ TokenizerState NextToken(Allocator *allocator, TokenizerState state, Token *toke
 
     return state;
 }
+
+void FreeToken(Allocator *allocator, Token token)
+{
+    switch (token.type)
+    {
+    case TOKEN_STRING:
+    case TOKEN_IDENT:
+    {
+        Free(allocator, (void*)token.str);
+        break;
+    }
+    default: break;
+    }
+}

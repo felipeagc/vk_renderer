@@ -26,37 +26,61 @@ void Free(Allocator *allocator, void *ptr)
     allocator->free(allocator, ptr);
 }
 
+typedef struct ArenaChunk
+{
+    struct ArenaChunk *prev;
+    uint8_t *data;
+    size_t offset;
+    size_t size;
+} ArenaChunk;
+
 struct Arena
 {
     Allocator allocator;
     Allocator *parent_allocator;
-    uint8_t *data;
-    size_t offset;
-    size_t size;
+    ArenaChunk *last_chunk;
 };
 
 #define ARENA_PTR_SIZE(ptr) *(((uint64_t*)ptr)-1)
+
+static ArenaChunk *ArenaNewChunk(Arena *arena, ArenaChunk *prev, size_t size)
+{
+    ArenaChunk *chunk = (ArenaChunk *)
+        Allocate(arena->parent_allocator, sizeof(*chunk));
+    memset(chunk, 0, sizeof(*chunk));
+
+    chunk->prev = prev;
+
+    chunk->size = size;
+    chunk->data = (uint8_t*)Allocate(arena->parent_allocator, chunk->size);
+
+    return chunk;
+}
 
 static void *ArenaAllocate(Allocator *allocator, size_t size)
 {
     Arena *arena = (Arena*)allocator;
 
-    size_t new_offset = arena->offset;
+    ArenaChunk *chunk = arena->last_chunk;
+
+    size_t new_offset = chunk->offset;
     while (new_offset % 16 != 0) new_offset++;
     new_offset += 16; // Header
     size_t data_offset = new_offset;
     new_offset += size;
 
-    if (arena->size <= new_offset)
+    if (chunk->size <= new_offset)
     {
-        while (arena->size <= new_offset) arena->size *= 2;
-        arena->data = (uint8_t*)Reallocate(arena->parent_allocator, arena->data, arena->size);
+        size_t new_chunk_size = chunk->size * 2;
+        while (new_chunk_size <= (size + 16)) new_chunk_size *= 2;
+        arena->last_chunk = ArenaNewChunk(arena, chunk, new_chunk_size);
+        return ArenaAllocate(allocator, size);
     }
 
-    uint8_t *ptr = &arena->data[data_offset];
+    uint8_t *ptr = &chunk->data[data_offset];
     ARENA_PTR_SIZE(ptr) = size;
 
-    arena->offset = new_offset;
+    chunk->offset = new_offset;
 
     return (void*)ptr;
 }
@@ -87,8 +111,7 @@ Arena *ArenaCreate(Allocator *parent_allocator, size_t default_size)
     arena->allocator.free = ArenaFree;
 
     arena->parent_allocator = parent_allocator;
-    arena->size = default_size;
-    arena->data = (uint8_t*)Allocate(arena->parent_allocator, arena->size);
+    arena->last_chunk = ArenaNewChunk(arena, NULL, default_size);
 
     return arena;
 }
@@ -98,14 +121,16 @@ Allocator *ArenaGetAllocator(Arena *arena)
     return &arena->allocator;
 }
 
-void ArenaReset(Arena *arena)
-{
-    arena->size = 0;
-}
-
 void ArenaDestroy(Arena *arena)
 {
-    Free(arena->parent_allocator, arena->data);
+    ArenaChunk *chunk = arena->last_chunk;
+    while (chunk)
+    {
+        Free(arena->parent_allocator, chunk->data);
+        ArenaChunk *chunk_to_free = chunk;
+        chunk = chunk->prev;
+        Free(arena->parent_allocator, chunk_to_free);
+    }
     Free(arena->parent_allocator, arena);
 }
 

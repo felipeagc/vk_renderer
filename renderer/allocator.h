@@ -23,7 +23,6 @@ typedef struct Arena Arena;
 
 Arena *ArenaCreate(Allocator *parent_allocator, size_t default_size);
 Allocator *ArenaGetAllocator(Arena *arena);
-void ArenaReset(Arena *arena);
 void ArenaDestroy(Arena *arena);
 
 const char *Strdup(Allocator *allocator, const char *str);

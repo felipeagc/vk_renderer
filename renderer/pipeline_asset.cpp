@@ -141,7 +141,7 @@ static bool stringToCompareOp(const char *str, size_t len, RgCompareOp *value)
 PipelineAsset *PipelineAssetCreateGraphics(
         Allocator *allocator,
         Engine *engine,
-        PipelineType type,
+        const char *pipeline_type,
         const char *hlsl,
         size_t hlsl_size)
 {
@@ -331,7 +331,7 @@ PipelineAsset *PipelineAssetCreateGraphics(
     pipeline_info.num_vertex_attributes = vertex_module.attributes_count;
     pipeline_info.vertex_attributes = vertex_module.attributes;
 
-    pipeline_info.pipeline_layout = EngineGetPipelineLayout(engine, type);
+    pipeline_info.pipeline_layout = EngineGetPipelineLayout(engine, pipeline_type);
 
     pipeline_asset->pipeline = rgGraphicsPipelineCreate(
                 device,

@@ -2,6 +2,7 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <assert.h>
 #include <rg.h>
 #include "allocator.h"
@@ -72,6 +73,7 @@ static const char *getExeDirPath(Allocator *allocator)
 struct Engine
 {
     Allocator *allocator;
+    Arena *arena;
     Platform *platform;
 
     const char *exe_dir;
@@ -81,9 +83,181 @@ struct Engine
     RgImage *black_image;
     RgSampler *default_sampler;
 
-    RgDescriptorSetLayout *bind_group_layouts[BIND_GROUP_MAX];
-    RgPipelineLayout *pipeline_layouts[PIPELINE_TYPE_MAX];
+    StringMap<RgPipelineLayout *> pipeline_layout_map;
+    StringMap<RgDescriptorSetLayout *> set_layout_map;
 };
+
+static void LoadConfig(Engine *engine, const char *config_path)
+{
+    Allocator *allocator = engine->allocator;
+    Allocator *arena = ArenaGetAllocator(engine->arena);
+    RgDevice *device = PlatformGetDevice(engine->platform);
+    
+    size_t text_size = 0;
+    const char *text = (const char *)
+        EngineLoadFileRelative(engine, allocator, config_path, &text_size);
+
+    Config *config = ConfigParse(allocator, text, text_size);
+    if (!config) exit(1);
+
+    // Print config
+    {
+        const char *config_str = ConfigSprint(config, allocator);
+        printf("%s\n", config_str);
+        Free(allocator, (void*)config_str);
+    }
+
+    ConfigValue *root = ConfigGetRoot(config);
+    ConfigValue *set_layouts_field = ConfigValueObjectGetField(root, "set_layouts");
+    assert(set_layouts_field);
+    assert(ConfigValueGetType(set_layouts_field) == CONFIG_VALUE_OBJECT);
+
+    ConfigValue *pipeline_layouts_field = ConfigValueObjectGetField(root, "pipeline_layouts");
+    assert(pipeline_layouts_field);
+    assert(ConfigValueGetType(pipeline_layouts_field) == CONFIG_VALUE_OBJECT);
+
+    {
+        ConfigValue **values = nullptr;
+        const char **names = nullptr;
+
+        size_t length = ConfigValueObjectGetAllFields(
+            set_layouts_field,
+            allocator,
+            &names,
+            &values);
+
+        for (size_t i = 0; i < length; ++i)
+        {
+            const char *name = names[i];
+            ConfigValue *value = values[i];
+
+            assert(ConfigValueGetType(value) == CONFIG_VALUE_ARRAY);
+
+            size_t binding_count = ConfigValueArrayGetLength(value);
+
+            RgDescriptorSetLayoutEntry *entries =
+                (RgDescriptorSetLayoutEntry *)
+                Allocate(allocator, sizeof(RgDescriptorSetLayoutEntry) * binding_count);
+
+            for (size_t j = 0; j < binding_count; ++j)
+            {
+                ConfigValue *binding_value = ConfigValueArrayGetElement(value, j);
+                assert(binding_value);
+                assert(ConfigValueGetType(binding_value) == CONFIG_VALUE_OBJECT);
+
+                entries[j] = {};
+                entries[j].binding = j;
+                entries[j].count = 1;
+
+                ConfigValue *type_value = ConfigValueObjectGetField(binding_value, "type");
+                assert(type_value);
+                assert(ConfigValueGetType(type_value) == CONFIG_VALUE_STRING);
+                ConfigValue *stages_value = ConfigValueObjectGetField(binding_value, "stages");
+                assert(stages_value);
+                assert(ConfigValueGetType(stages_value) == CONFIG_VALUE_ARRAY);
+
+                const char *binding_type_string = ConfigValueGetString(type_value);
+                if (strcmp(binding_type_string, "uniform_buffer") == 0)
+                {
+                    entries[j].type = RG_DESCRIPTOR_UNIFORM_BUFFER_DYNAMIC;
+                }
+                else if (strcmp(binding_type_string, "image") == 0)
+                {
+                    entries[j].type = RG_DESCRIPTOR_IMAGE;
+                }
+                else if (strcmp(binding_type_string, "sampler") == 0)
+                {
+                    entries[j].type = RG_DESCRIPTOR_SAMPLER;
+                }
+
+                size_t stage_count = ConfigValueArrayGetLength(stages_value);
+                for (size_t k = 0; k < stage_count; ++k)
+                {
+                    ConfigValue *stage_value = ConfigValueArrayGetElement(stages_value, k);
+                    assert(stage_value);
+                    assert(ConfigValueGetType(stage_value) == CONFIG_VALUE_STRING);
+
+                    const char *stage_string = ConfigValueGetString(stage_value);
+                    if (strcmp(stage_string, "vertex") == 0)
+                    {
+                        entries[j].shader_stages |= RG_SHADER_STAGE_VERTEX;
+                    }
+                    else if (strcmp(stage_string, "fragment") == 0)
+                    {
+                        entries[j].shader_stages |= RG_SHADER_STAGE_FRAGMENT;
+                    }
+                    else if (strcmp(stage_string, "compute") == 0)
+                    {
+                        entries[j].shader_stages |= RG_SHADER_STAGE_COMPUTE;
+                    }
+                }
+            }
+
+            RgDescriptorSetLayoutInfo info = {};
+            info.entries = entries;
+            info.entry_count = binding_count;
+            auto set_layout = rgDescriptorSetLayoutCreate(device, &info);
+
+            engine->set_layout_map.set(Strdup(arena, name), set_layout);
+            Free(allocator, entries);
+        }
+
+        Free(allocator, (void*)values);
+        Free(allocator, (void*)names);
+    }
+
+    {
+        ConfigValue **values = nullptr;
+        const char **names = nullptr;
+
+        size_t length = ConfigValueObjectGetAllFields(
+            pipeline_layouts_field,
+            allocator,
+            &names,
+            &values);
+
+        for (size_t i = 0; i < length; ++i)
+        {
+            const char *name = names[i];
+            ConfigValue *value = values[i];
+
+            assert(ConfigValueGetType(value) == CONFIG_VALUE_OBJECT);
+
+            ConfigValue *set_layouts_field = ConfigValueObjectGetField(value, "set_layouts");
+            assert(set_layouts_field);
+            assert(ConfigValueGetType(set_layouts_field) == CONFIG_VALUE_ARRAY);
+            size_t set_layout_count = ConfigValueArrayGetLength(set_layouts_field);
+
+            RgDescriptorSetLayout **set_layouts = (RgDescriptorSetLayout **)
+                Allocate(allocator, sizeof(RgDescriptorSetLayout *) * set_layout_count);
+
+            for (size_t j = 0; j < set_layout_count; ++j)
+            {
+                ConfigValue *set_layout_name_value = ConfigValueArrayGetElement(set_layouts_field, j);
+                assert(set_layout_name_value);
+                assert(ConfigValueGetType(set_layout_name_value) == CONFIG_VALUE_STRING);
+                const char *set_layout_name = ConfigValueGetString(set_layout_name_value);
+
+                engine->set_layout_map.get(set_layout_name, &set_layouts[j]);
+            }
+
+            RgPipelineLayoutInfo info = {};
+            info.set_layouts = set_layouts;
+            info.set_layout_count = set_layout_count;
+            RgPipelineLayout *pipeline_layout = rgPipelineLayoutCreate(device, &info);
+
+            engine->pipeline_layout_map.set(Strdup(arena, name), pipeline_layout);
+
+            Free(allocator, set_layouts);
+        }
+        
+        Free(allocator, (void*)values);
+        Free(allocator, (void*)names);
+    }
+
+    ConfigFree(config);
+    Free(allocator, (void*)text);
+}
 
 Engine *EngineCreate(Allocator *allocator)
 {
@@ -92,139 +266,22 @@ Engine *EngineCreate(Allocator *allocator)
 
     engine->allocator = allocator;
     engine->platform = PlatformCreate(allocator, "App");
+    engine->arena = ArenaCreate(engine->allocator, 4194304); // 4MiB
 
     engine->exe_dir = getExeDirPath(allocator);
 
     RgDevice *device = PlatformGetDevice(engine->platform);
 
-    {
-        size_t text_size = 0;
-        const char *text = (const char *)
-            EngineLoadFileRelative(engine, NULL, "../spec.json", &text_size);
+    engine->pipeline_layout_map = StringMap<RgPipelineLayout *>::create(allocator);
+    engine->set_layout_map = StringMap<RgDescriptorSetLayout *>::create(allocator);
 
-        Config *config = ConfigParse(NULL, text, text_size);
-        if (config)
-        {
-            const char *config_str = ConfigSprint(config, NULL);
-            printf("%s\n", config_str);
-            Free(NULL, (void*)config_str);
-            ConfigFree(config);
-        }
-
-        Free(NULL, (void*)text);
-    }
-
-    //
-    // Create descriptor set layouts
-    //
-
-    {
-        RgDescriptorSetLayoutEntry entries[] = {
-            {
-                .binding = 0,
-                .type = RG_DESCRIPTOR_UNIFORM_BUFFER_DYNAMIC,
-                .shader_stages = RG_SHADER_STAGE_FRAGMENT | RG_SHADER_STAGE_VERTEX,
-                .count = 1,
-            },
-        };
-
-        RgDescriptorSetLayoutInfo info = {};
-
-        info.entries = entries;
-        info.entry_count = sizeof(entries)/sizeof(entries[0]);
-
-        engine->bind_group_layouts[BIND_GROUP_CAMERA] =
-            rgDescriptorSetLayoutCreate(device, &info);
-    }
-
-    {
-        RgDescriptorSetLayoutEntry entries[] = {
-            {
-                .binding = 0,
-                .type = RG_DESCRIPTOR_UNIFORM_BUFFER_DYNAMIC,
-                .shader_stages = RG_SHADER_STAGE_FRAGMENT | RG_SHADER_STAGE_VERTEX,
-                .count = 1,
-            },
-            {
-                .binding = 1,
-                .type = RG_DESCRIPTOR_UNIFORM_BUFFER_DYNAMIC,
-                .shader_stages = RG_SHADER_STAGE_FRAGMENT | RG_SHADER_STAGE_VERTEX,
-                .count = 1,
-            },
-            {
-                .binding = 2,
-                .type = RG_DESCRIPTOR_SAMPLER,
-                .shader_stages = RG_SHADER_STAGE_FRAGMENT | RG_SHADER_STAGE_VERTEX,
-                .count = 1,
-            },
-            {
-                .binding = 3,
-                .type = RG_DESCRIPTOR_IMAGE,
-                .shader_stages = RG_SHADER_STAGE_FRAGMENT | RG_SHADER_STAGE_VERTEX,
-                .count = 1,
-            },
-            {
-                .binding = 4,
-                .type = RG_DESCRIPTOR_IMAGE,
-                .shader_stages = RG_SHADER_STAGE_FRAGMENT | RG_SHADER_STAGE_VERTEX,
-                .count = 1,
-            },
-            {
-                .binding = 5,
-                .type = RG_DESCRIPTOR_IMAGE,
-                .shader_stages = RG_SHADER_STAGE_FRAGMENT | RG_SHADER_STAGE_VERTEX,
-                .count = 1,
-            },
-            {
-                .binding = 6,
-                .type = RG_DESCRIPTOR_IMAGE,
-                .shader_stages = RG_SHADER_STAGE_FRAGMENT | RG_SHADER_STAGE_VERTEX,
-                .count = 1,
-            },
-            {
-                .binding = 7,
-                .type = RG_DESCRIPTOR_IMAGE,
-                .shader_stages = RG_SHADER_STAGE_FRAGMENT | RG_SHADER_STAGE_VERTEX,
-                .count = 1,
-            },
-        };
-
-        RgDescriptorSetLayoutInfo info = {};
-        info.entries = entries;
-        info.entry_count = sizeof(entries) / sizeof(entries[0]);
-
-        engine->bind_group_layouts[BIND_GROUP_MODEL] =
-            rgDescriptorSetLayoutCreate(device, &info);
-    }
-
-    {
-        RgDescriptorSetLayoutEntry entries[] = {
-            {
-                .binding = 0,
-                .type = RG_DESCRIPTOR_IMAGE,
-                .shader_stages = RG_SHADER_STAGE_FRAGMENT,
-                .count = 1,
-            },
-            {
-                .binding = 1,
-                .type = RG_DESCRIPTOR_SAMPLER,
-                .shader_stages = RG_SHADER_STAGE_FRAGMENT,
-                .count = 1,
-            },
-        };
-
-        RgDescriptorSetLayoutInfo info = {};
-        info.entries = entries;
-        info.entry_count = sizeof(entries) / sizeof(entries[0]);
-
-        engine->bind_group_layouts[BIND_GROUP_POSTPROCESS] =
-            rgDescriptorSetLayoutCreate(device, &info);
-    }
+    LoadConfig(engine, "../spec.json");
 
     //
     // Create pipeline layouts
     //
 
+    #if 0
     {
         RgDescriptorSetLayout *set_layouts[] = {
             engine->bind_group_layouts[BIND_GROUP_CAMERA],
@@ -249,6 +306,7 @@ Engine *EngineCreate(Allocator *allocator)
         engine->pipeline_layouts[PIPELINE_TYPE_POSTPROCESS] =
             rgPipelineLayoutCreate(device, &pipeline_layout_info);
     }
+    #endif
 
     engine->transfer_cmd_pool = rgCmdPoolCreate(device, RG_QUEUE_TYPE_TRANSFER);
 
@@ -304,14 +362,14 @@ void EngineDestroy(Engine *engine)
 {
     RgDevice *device = PlatformGetDevice(engine->platform);
 
-    for (uint32_t i = 0; i < PIPELINE_TYPE_MAX; ++i)
+    for (auto &slot : engine->pipeline_layout_map)
     {
-        rgPipelineLayoutDestroy(device, engine->pipeline_layouts[i]);
+        rgPipelineLayoutDestroy(device, slot.value);
     }
 
-    for (uint32_t i = 0; i < BIND_GROUP_MAX; ++i)
+    for (auto &slot : engine->set_layout_map)
     {
-        rgDescriptorSetLayoutDestroy(device, engine->bind_group_layouts[i]);
+        rgDescriptorSetLayoutDestroy(device, slot.value);
     }
 
     rgImageDestroy(device, engine->white_image);
@@ -319,7 +377,12 @@ void EngineDestroy(Engine *engine)
     rgSamplerDestroy(device, engine->default_sampler);
     rgCmdPoolDestroy(device, engine->transfer_cmd_pool);
 
+    engine->pipeline_layout_map.free();
+    engine->set_layout_map.free();
+
     PlatformDestroy(engine->platform);
+
+    ArenaDestroy(engine->arena);
 
     Free(engine->allocator, (void*)engine->exe_dir);
     Free(engine->allocator, engine);
@@ -330,14 +393,20 @@ Platform *EngineGetPlatform(Engine *engine)
     return engine->platform;
 }
 
-RgDescriptorSetLayout *EngineGetSetLayout(Engine *engine, BindGroupType type)
+RgDescriptorSetLayout *EngineGetSetLayout(Engine *engine, const char *name)
 {
-    return engine->bind_group_layouts[type];
+    RgDescriptorSetLayout *set_layout = nullptr;
+    engine->set_layout_map.get(name, &set_layout);
+    assert(set_layout);
+    return set_layout;
 }
 
-RgPipelineLayout *EngineGetPipelineLayout(Engine *engine, PipelineType type)
+RgPipelineLayout *EngineGetPipelineLayout(Engine *engine, const char *name)
 {
-    return engine->pipeline_layouts[type];
+    RgPipelineLayout *pipeline_layout = nullptr;
+    engine->pipeline_layout_map.get(name, &pipeline_layout);
+    assert(pipeline_layout);
+    return pipeline_layout;
 }
 
 const char *EngineGetExeDir(Engine *engine)

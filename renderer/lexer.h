@@ -38,3 +38,4 @@ typedef struct TokenizerState
 
 TokenizerState NewTokenizerState(const char *text, size_t length);
 TokenizerState NextToken(Allocator *allocator, TokenizerState state, Token *token);
+void FreeToken(Allocator *allocator, Token token);

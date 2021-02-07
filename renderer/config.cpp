@@ -11,6 +11,7 @@
 struct Config
 {
     Allocator *allocator;
+    Arena *arena;
     ConfigValue *root;
 };
 
@@ -29,7 +30,8 @@ struct ConfigValue
 
 static ConfigValue *NewValue(Config *config, ConfigValueType type)
 {
-    ConfigValue *value = (ConfigValue*)Allocate(config->allocator, sizeof(*value));
+    Allocator *arena = ArenaGetAllocator(config->arena);
+    ConfigValue *value = (ConfigValue*)Allocate(arena, sizeof(*value));
     *value = {};
     value->type = type;
 
@@ -39,10 +41,10 @@ static ConfigValue *NewValue(Config *config, ConfigValueType type)
         value->str = nullptr;
         break;
     case CONFIG_VALUE_OBJECT:
-        value->object = StringMap<ConfigValue*>::create(config->allocator);
+        value->object = StringMap<ConfigValue*>::create(arena);
         break;
     case CONFIG_VALUE_ARRAY:
-        value->array = Array<ConfigValue*>::create(config->allocator);
+        value->array = Array<ConfigValue*>::create(arena);
         break;
     default: break;
     }
@@ -60,21 +62,17 @@ Config *ConfigCreate(Allocator *allocator)
     return config;
 }
 
-static Token PeekToken(Config *config, TokenizerState state)
+static Token PeekToken(Allocator *allocator, TokenizerState state)
 {
     Token new_token = {};
-    NextToken(config->allocator, state, &new_token);
-    if (new_token.type == TOKEN_ERROR)
-    {
-    }
-
+    NextToken(allocator, state, &new_token);
     return new_token;
 }
 
-static bool ExpectToken(Config *config, TokenizerState *state, TokenType type, Token *token)
+static bool ExpectToken(Allocator *allocator, TokenizerState *state, TokenType type, Token *token)
 {
     Token new_token = {};
-    TokenizerState new_state = NextToken(config->allocator, *state, &new_token);
+    TokenizerState new_state = NextToken(allocator, *state, &new_token);
     if (new_token.type == TOKEN_ERROR)
     {
         fprintf(stderr, "Config parse error: %s\n", new_token.str);
@@ -99,32 +97,34 @@ static bool ExpectToken(Config *config, TokenizerState *state, TokenType type, T
 
 static ConfigValue *ParseValue(Config *config, TokenizerState *state)
 {
-    Token first_token = PeekToken(config, *state);
+    Allocator *arena = ArenaGetAllocator(config->arena);
+
+    Token first_token = PeekToken(arena, *state);
     switch (first_token.type)
     {
     case TOKEN_LCURLY:
     {
         ConfigValue *value = NewValue(config, CONFIG_VALUE_OBJECT);
-        if (!ExpectToken(config, state, TOKEN_LCURLY, nullptr)) return nullptr;
+        if (!ExpectToken(arena, state, TOKEN_LCURLY, nullptr)) return nullptr;
 
-        while (PeekToken(config, *state).type == TOKEN_IDENT)
+        while (PeekToken(arena, *state).type == TOKEN_IDENT)
         {
             Token ident_token = {};
-            if (!ExpectToken(config, state, TOKEN_IDENT, &ident_token)) return nullptr;
+            if (!ExpectToken(arena, state, TOKEN_IDENT, &ident_token)) return nullptr;
 
-            if (!ExpectToken(config, state, TOKEN_COLON, nullptr)) return nullptr;
+            if (!ExpectToken(arena, state, TOKEN_COLON, nullptr)) return nullptr;
 
             ConfigValue *field_value = ParseValue(config, state);
             if (!field_value) return nullptr;
             value->object.set(ident_token.str, field_value);
 
-            if (PeekToken(config, *state).type != TOKEN_RCURLY)
+            if (PeekToken(arena, *state).type != TOKEN_RCURLY)
             {
-                if (!ExpectToken(config, state, TOKEN_COMMA, nullptr)) return nullptr;
+                if (!ExpectToken(arena, state, TOKEN_COMMA, nullptr)) return nullptr;
             }
         }
 
-        if (!ExpectToken(config, state, TOKEN_RCURLY, nullptr)) return nullptr;
+        if (!ExpectToken(arena, state, TOKEN_RCURLY, nullptr)) return nullptr;
 
         return value;
     }
@@ -132,22 +132,22 @@ static ConfigValue *ParseValue(Config *config, TokenizerState *state)
     case TOKEN_LBRACKET:
     {
         ConfigValue *value = NewValue(config, CONFIG_VALUE_ARRAY);
-        if (!ExpectToken(config, state, TOKEN_LBRACKET, nullptr)) return nullptr;
+        if (!ExpectToken(arena, state, TOKEN_LBRACKET, nullptr)) return nullptr;
 
-        while (PeekToken(config, *state).type != TOKEN_RBRACKET)
+        while (PeekToken(arena, *state).type != TOKEN_RBRACKET)
         {
             ConfigValue *elem_value = ParseValue(config, state);
             if (!elem_value) return nullptr;
 
             value->array.push_back(elem_value);
 
-            if (PeekToken(config, *state).type != TOKEN_RBRACKET)
+            if (PeekToken(arena, *state).type != TOKEN_RBRACKET)
             {
-                if (!ExpectToken(config, state, TOKEN_COMMA, nullptr)) return nullptr;
+                if (!ExpectToken(arena, state, TOKEN_COMMA, nullptr)) return nullptr;
             }
         }
 
-        if (!ExpectToken(config, state, TOKEN_RBRACKET, nullptr)) return nullptr;
+        if (!ExpectToken(arena, state, TOKEN_RBRACKET, nullptr)) return nullptr;
 
         return value;
     }
@@ -155,7 +155,7 @@ static ConfigValue *ParseValue(Config *config, TokenizerState *state)
     case TOKEN_STRING:
     {
         Token str_token = {};
-        if (!ExpectToken(config, state, TOKEN_STRING, &str_token)) return nullptr;
+        if (!ExpectToken(arena, state, TOKEN_STRING, &str_token)) return nullptr;
         ConfigValue *value = NewValue(config, CONFIG_VALUE_STRING);
         value->str = str_token.str;
         return value;
@@ -192,9 +192,11 @@ Config *ConfigParse(Allocator *allocator, const char *text, size_t text_length)
     Config *config = (Config*)Allocate(allocator, sizeof(*config));
     *config = {};
     config->allocator = allocator;
+    config->arena = ArenaCreate(allocator, 1 << 12);
 
     TokenizerState state = NewTokenizerState(text, text_length);
     config->root = ParseValue(config, &state);
+
     if (!config->root)
     {
         ConfigFree(config);
@@ -204,52 +206,11 @@ Config *ConfigParse(Allocator *allocator, const char *text, size_t text_length)
     return config;
 }
 
-static void ConfigValueFree(Allocator *allocator, ConfigValue *value)
-{
-    switch (value->type)
-    {
-    case CONFIG_VALUE_INT:
-    case CONFIG_VALUE_FLOAT: break;
-    case CONFIG_VALUE_STRING:
-    {
-        if (value->str)
-        {
-            Free(allocator, (void*)value->str);
-        }
-        break;
-    }
-    case CONFIG_VALUE_OBJECT:
-    {
-        for (auto &slot : value->object)
-        {
-            ConfigValue *field_value = slot.value;
-            ConfigValueFree(allocator, field_value);
-        }
-        value->object.free();
-        break;
-    }
-    case CONFIG_VALUE_ARRAY:
-    {
-        for (ConfigValue *elem_value : value->array)
-        {
-            ConfigValueFree(allocator, elem_value);
-        }
-        value->array.free();
-        break;
-    }
-    }
-    Free(allocator, value);
-}
-
 void ConfigFree(Config *config)
 {
     if (!config) return;
 
-    (void)config;
-    if (config->root)
-    {
-        ConfigValueFree(config->allocator, config->root);
-    }
+    ArenaDestroy(config->arena);
     Free(config->allocator, config);
 }
 
@@ -275,13 +236,13 @@ double ConfigValueGetFloat(ConfigValue *value, double default_value)
     return value->float_; 
 }
 
-const char *ConfigValueGetString(ConfigValue *value, const char *default_value)
+const char *ConfigValueGetString(ConfigValue *value)
 {
-    if (value->type != CONFIG_VALUE_STRING) return default_value;
+    if (value->type != CONFIG_VALUE_STRING) return nullptr;
     return value->str;
 }
 
-ConfigValue *ConfigValueGetField(ConfigValue *value, const char *name)
+ConfigValue *ConfigValueObjectGetField(ConfigValue *value, const char *name)
 {
     if (value->type != CONFIG_VALUE_OBJECT) return nullptr;
     ConfigValue *field_value = nullptr;
@@ -291,13 +252,35 @@ ConfigValue *ConfigValueGetField(ConfigValue *value, const char *name)
     return field_value;
 }
 
-size_t ConfigValueGetArrayLength(ConfigValue *value)
+size_t ConfigValueObjectGetAllFields(
+    ConfigValue *value,
+    Allocator *allocator,
+    const char ***names,
+    ConfigValue ***values)
+{
+    size_t length = value->object.length();
+
+    *names = (const char**)Allocate(allocator, sizeof(char*) * length);
+    *values = (ConfigValue**)Allocate(allocator, sizeof(ConfigValue*) * length);
+
+    size_t index = 0;
+    for (auto &slot : value->object)
+    {
+        (*names)[index] = slot.key;
+        (*values)[index] = slot.value;
+        index++;
+    }
+
+    return length;
+}
+
+size_t ConfigValueArrayGetLength(ConfigValue *value)
 {
     if (value->type != CONFIG_VALUE_ARRAY) return 0;
     return value->array.length;
 }
 
-ConfigValue *ConfigValueGetElement(ConfigValue *value, size_t index)
+ConfigValue *ConfigValueArrayGetElement(ConfigValue *value, size_t index)
 {
     if (value->type != CONFIG_VALUE_ARRAY) return nullptr;
     return value->array[index];

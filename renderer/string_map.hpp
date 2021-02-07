@@ -151,17 +151,6 @@ struct StringMap
         this->slots[i].key = nullptr;
     }
 
-    size_t length()
-    {
-        size_t count = 0;
-        for (auto &slot : this)
-        {
-            (void)slot;
-            count++;
-        }
-        return count;
-    }
-
     void free()
     {
         Free(this->allocator, this->slots);
@@ -183,6 +172,18 @@ struct StringMap
     {
         return Iterator{this, this->size};
     }
+
+    size_t length()
+    {
+        size_t count = 0;
+        for (auto &slot : *this)
+        {
+            (void)slot;
+            count++;
+        }
+        return count;
+    }
+
 };
 
 template <typename T>

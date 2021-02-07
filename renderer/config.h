@@ -27,9 +27,14 @@ ConfigValueType ConfigValueGetType(ConfigValue *value);
 
 int64_t ConfigValueGetInt(ConfigValue *value, int64_t default_value);
 double ConfigValueGetFloat(ConfigValue *value, double default_value);
-const char *ConfigValueGetString(ConfigValue *value, const char *default_value);
+const char *ConfigValueGetString(ConfigValue *value);
 
-ConfigValue *ConfigValueGetField(ConfigValue *value, const char *name);
+ConfigValue *ConfigValueObjectGetField(ConfigValue *value, const char *name);
+size_t ConfigValueObjectGetAllFields(
+    ConfigValue *value,
+    Allocator *allocator,
+    const char ***names,
+    ConfigValue ***values);
 
-size_t ConfigValueGetArrayLength(ConfigValue *value);
-ConfigValue *ConfigValueGetElement(ConfigValue *value, size_t index);
+size_t ConfigValueArrayGetLength(ConfigValue *value);
+ConfigValue *ConfigValueArrayGetElement(ConfigValue *value, size_t index);

@@ -195,7 +195,7 @@ ModelAsset *ModelAssetFromMesh(
     }
 
     RgDescriptorSetLayout *material_set_layout =
-        EngineGetSetLayout(engine, BIND_GROUP_MODEL);
+        EngineGetSetLayout(engine, "model");
 
     for (Material &material : model->materials)
     {
