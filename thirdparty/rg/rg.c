@@ -1607,6 +1607,17 @@ RgDevice *rgDeviceCreate(const RgDeviceInfo *info)
     }
 
     device->physical_device = physical_devices[0];
+    for (size_t i = 0; i < num_physical_devices; ++i)
+    {
+        VkPhysicalDeviceProperties physical_device_properties = {0};
+        vkGetPhysicalDeviceProperties(
+            physical_devices[i], &physical_device_properties);
+        if (physical_device_properties.deviceType != VK_PHYSICAL_DEVICE_TYPE_CPU)
+        {
+            device->physical_device = physical_devices[i];
+            break;
+        }
+    }
     free(physical_devices);
 
     vkGetPhysicalDeviceProperties(
