@@ -57,5 +57,6 @@ VsOutput vertex(in VsInput vs_in)
 
 float4 pixel(VsOutput vs_out) : SV_Target
 {
-	return float4(vs_out.sv_pos.xyz, 1.0);
+    float3 albedo = albedo_image.Sample(model_sampler, vs_out.uv).xyz;
+	return float4(albedo, 1.0);
 }

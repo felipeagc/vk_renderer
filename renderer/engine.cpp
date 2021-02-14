@@ -10,6 +10,9 @@
 #include "lexer.h"
 #include "string_map.hpp"
 #include "config.h"
+#include "pipeline_util.h"
+#include "pbr.h"
+#include <tinyshader/tinyshader.h>
 
 #if defined(_MSC_VER)
 #pragma warning(disable:4996)
@@ -78,26 +81,25 @@ struct Engine
 
     const char *exe_dir;
 
+    RgCmdPool *graphics_cmd_pool;
     RgCmdPool *transfer_cmd_pool;
     RgImage *white_image;
     RgImage *black_image;
     RgSampler *default_sampler;
 
+    RgImage *brdf_image;
+
     StringMap<RgPipelineLayout *> pipeline_layout_map;
     StringMap<RgDescriptorSetLayout *> set_layout_map;
 };
 
-static void LoadConfig(Engine *engine, const char *config_path)
+static void LoadConfig(Engine *engine, const char *spec, size_t spec_size)
 {
     Allocator *allocator = engine->allocator;
     Allocator *arena = ArenaGetAllocator(engine->arena);
     RgDevice *device = PlatformGetDevice(engine->platform);
-    
-    size_t text_size = 0;
-    const char *text = (const char *)
-        EngineLoadFileRelative(engine, allocator, config_path, &text_size);
 
-    Config *config = ConfigParse(allocator, text, text_size);
+    Config *config = ConfigParse(allocator, spec, spec_size);
     if (!config) exit(1);
 
     // Print config
@@ -256,10 +258,9 @@ static void LoadConfig(Engine *engine, const char *config_path)
     }
 
     ConfigFree(config);
-    Free(allocator, (void*)text);
 }
 
-Engine *EngineCreate(Allocator *allocator)
+Engine *EngineCreate(Allocator *allocator, const char *spec, size_t spec_size)
 {
     Engine *engine = (Engine*)Allocate(allocator, sizeof(Engine));
     *engine = {};
@@ -275,40 +276,10 @@ Engine *EngineCreate(Allocator *allocator)
     engine->pipeline_layout_map = StringMap<RgPipelineLayout *>::create(allocator);
     engine->set_layout_map = StringMap<RgDescriptorSetLayout *>::create(allocator);
 
-    LoadConfig(engine, "../spec.json");
-
-    //
-    // Create pipeline layouts
-    //
-
-    #if 0
-    {
-        RgDescriptorSetLayout *set_layouts[] = {
-            engine->bind_group_layouts[BIND_GROUP_CAMERA],
-            engine->bind_group_layouts[BIND_GROUP_MODEL],
-        };
-        RgPipelineLayoutInfo pipeline_layout_info = {};
-        pipeline_layout_info.set_layouts = set_layouts;
-        pipeline_layout_info.set_layout_count = sizeof(set_layouts) / sizeof(set_layouts[0]);
-
-        engine->pipeline_layouts[PIPELINE_TYPE_MODEL] =
-            rgPipelineLayoutCreate(device, &pipeline_layout_info);
-    }
-
-    {
-        RgDescriptorSetLayout *set_layouts[] = {
-            engine->bind_group_layouts[BIND_GROUP_POSTPROCESS],
-        };
-        RgPipelineLayoutInfo pipeline_layout_info = {};
-        pipeline_layout_info.set_layouts = set_layouts;
-        pipeline_layout_info.set_layout_count = sizeof(set_layouts) / sizeof(set_layouts[0]);
-
-        engine->pipeline_layouts[PIPELINE_TYPE_POSTPROCESS] =
-            rgPipelineLayoutCreate(device, &pipeline_layout_info);
-    }
-    #endif
+    LoadConfig(engine, spec, spec_size);
 
     engine->transfer_cmd_pool = rgCmdPoolCreate(device, RG_QUEUE_TYPE_TRANSFER);
+    engine->graphics_cmd_pool = rgCmdPoolCreate(device, RG_QUEUE_TYPE_GRAPHICS);
 
     RgImageInfo image_info = {};
     image_info.extent = {1, 1, 1};
@@ -322,7 +293,7 @@ Engine *EngineCreate(Allocator *allocator)
     engine->white_image = rgImageCreate(device, &image_info);
     engine->black_image = rgImageCreate(device, &image_info);
 
-    uint8_t white_data[] = {0, 0, 0, 255};
+    uint8_t white_data[] = {255, 255, 255, 255};
     uint8_t black_data[] = {0, 0, 0, 255};
 
     RgImageCopy image_copy = {};
@@ -355,6 +326,8 @@ Engine *EngineCreate(Allocator *allocator)
     sampler_info.border_color = RG_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
     engine->default_sampler = rgSamplerCreate(device, &sampler_info);
 
+    engine->brdf_image = GenerateBRDFLUT(engine, engine->graphics_cmd_pool, 512);
+
     return engine;
 }
 
@@ -372,10 +345,12 @@ void EngineDestroy(Engine *engine)
         rgDescriptorSetLayoutDestroy(device, slot.value);
     }
 
+    rgImageDestroy(device, engine->brdf_image);
     rgImageDestroy(device, engine->white_image);
     rgImageDestroy(device, engine->black_image);
     rgSamplerDestroy(device, engine->default_sampler);
     rgCmdPoolDestroy(device, engine->transfer_cmd_pool);
+    rgCmdPoolDestroy(device, engine->graphics_cmd_pool);
 
     engine->pipeline_layout_map.free();
     engine->set_layout_map.free();
@@ -430,7 +405,7 @@ uint8_t *EngineLoadFileRelative(
     fseek(f, 0, SEEK_SET);
 
     uint8_t *data = (uint8_t*)Allocate(allocator, *size);
-    fread(data, *size, 1, f);
+    assert(fread(data, 1, *size, f) == *size);
 
     fclose(f);
 
@@ -449,8 +424,88 @@ RgImage *EngineGetBlackImage(Engine *engine)
     return engine->black_image;
 }
 
+RgImage *EngineGetBRDFImage(Engine *engine)
+{
+    return engine->brdf_image;
+}
+
 RgSampler *EngineGetDefaultSampler(Engine *engine)
 {
     return engine->default_sampler;
 }
 
+RgPipeline *EngineCreateGraphicsPipeline(Engine *engine, const char *path, const char *type)
+{
+    RgPipelineLayout *pipeline_layout = EngineGetPipelineLayout(engine, type);
+    assert(pipeline_layout);
+
+    size_t hlsl_size = 0;
+    char *hlsl = (char*)
+        EngineLoadFileRelative(engine, engine->allocator, path, &hlsl_size);
+    assert(hlsl);
+
+    RgPipeline *pipeline =
+        PipelineUtilCreateGraphicsPipeline(engine, engine->allocator, pipeline_layout, hlsl, hlsl_size);
+    assert(pipeline);
+
+    Free(engine->allocator, hlsl);
+
+    return pipeline;
+}
+
+RgPipeline *EngineCreateComputePipeline(Engine *engine, const char *path, const char *type)
+{
+    Platform *platform = EngineGetPlatform(engine);
+    RgDevice *device = PlatformGetDevice(platform);
+
+    RgPipelineLayout *pipeline_layout = EngineGetPipelineLayout(engine, type);
+    assert(pipeline_layout);
+
+    size_t hlsl_size = 0;
+    char *hlsl = (char*) EngineLoadFileRelative(engine, engine->allocator, path, &hlsl_size);
+    assert(hlsl);
+
+    uint8_t *spv_code = NULL;
+    size_t spv_code_size = 0;
+
+    {
+        TsCompilerOptions *options = tsCompilerOptionsCreate();
+        tsCompilerOptionsSetStage(options, TS_SHADER_STAGE_VERTEX);
+        const char *entry_point = "main";
+        tsCompilerOptionsSetEntryPoint(options, entry_point, strlen(entry_point));
+        tsCompilerOptionsSetSource(options, hlsl, hlsl_size, NULL, 0);
+
+        TsCompilerOutput *output = tsCompile(options);
+        const char *errors = tsCompilerOutputGetErrors(output);
+        if (errors)
+        {
+            fprintf(stderr, "Shader compilation error:\n%s\n", errors);
+
+            tsCompilerOutputDestroy(output);
+            tsCompilerOptionsDestroy(options);
+            exit(1);
+        }
+
+        size_t spirv_size = 0;
+        const uint8_t *spirv = tsCompilerOutputGetSpirv(output, &spirv_size);
+
+        spv_code = (uint8_t*)Allocate(engine->allocator, spirv_size);
+        memcpy(spv_code, spirv, spirv_size);
+        spv_code_size = spirv_size;
+
+        tsCompilerOutputDestroy(output);
+        tsCompilerOptionsDestroy(options);
+    }
+
+    RgComputePipelineInfo info = {};
+    info.pipeline_layout = pipeline_layout;
+    info.code = spv_code;
+    info.code_size = spv_code_size;
+    RgPipeline *pipeline = rgComputePipelineCreate(device, &info);
+    assert(pipeline);
+
+    Free(engine->allocator, spv_code);
+    Free(engine->allocator, hlsl);
+
+    return pipeline;
+}

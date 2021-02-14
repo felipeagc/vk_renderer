@@ -8,9 +8,6 @@ and [rg.c](https://github.com/felipeagc/vk_renderer/blob/master/thirdparty/rg/rg
 
 Using [tinyshader](https://github.com/felipeagc/tinyshader) for shader compilation at runtime.
 
-Instead of using reflection on the shaders, I use a [configuration file](https://github.com/felipeagc/vk_renderer/blob/master/spec.json)
-for declaring descriptor set layouts and pipeline layouts.
-
 ## Building and running
 
 Only tested on Linux for now.

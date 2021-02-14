@@ -30,8 +30,10 @@ add_library(
   renderer/uniform_arena.cpp
   renderer/model_asset.h
   renderer/model_asset.cpp
-  renderer/pipeline_asset.h
-  renderer/pipeline_asset.cpp
+  renderer/pipeline_util.h
+  renderer/pipeline_util.cpp
+  renderer/pbr.h
+  renderer/pbr.cpp
 
   thirdparty/rg/rg.h
   thirdparty/rg/rg.c

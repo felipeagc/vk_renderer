@@ -1,4 +1,4 @@
-#include "pipeline_asset.h"
+#include "pipeline_util.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -14,8 +14,6 @@
 #include "array.hpp"
 
 enum {
-    MAX_SETS = 16,
-    MAX_BINDINGS = 16,
     MAX_ATTRIBUTES = 16,
 };
 
@@ -37,18 +35,9 @@ typedef struct Id
     bool is_buffer_block;
 } Id;
 
-typedef struct SetInfo
-{
-    uint32_t bindings_count;
-    RgDescriptorType bindings[MAX_BINDINGS];
-} SetInfo;
-
 typedef struct ModuleInfo
 {
     RgShaderStage stage;
-
-    SetInfo sets[MAX_SETS];
-    uint32_t sets_count;
 
     uint32_t vertex_stride;
     RgVertexAttribute attributes[MAX_ATTRIBUTES];
@@ -64,7 +53,6 @@ struct PipelineAsset
 
 static void AnalyzeSpirv(
     RgShaderStage stage,
-    bool dynamic_buffers,
     const uint32_t *code,
     size_t code_size,
     ModuleInfo *module);
@@ -138,21 +126,13 @@ static bool stringToCompareOp(const char *str, size_t len, RgCompareOp *value)
     return true;
 }
 
-PipelineAsset *PipelineAssetCreateGraphics(
-        Allocator *allocator,
+extern "C" RgPipeline *PipelineUtilCreateGraphicsPipeline(
         Engine *engine,
-        const char *pipeline_type,
-        const char *hlsl,
-        size_t hlsl_size)
+        Allocator *allocator,
+        RgPipelineLayout *pipeline_layout,
+        const char *hlsl, size_t hlsl_size)
 {
-    PipelineAsset *pipeline_asset =
-        (PipelineAsset*)Allocate(allocator, sizeof(PipelineAsset));
-    *pipeline_asset = {};
-
-    pipeline_asset->allocator = allocator;
-    pipeline_asset->engine = engine;
-
-    Platform *platform = EngineGetPlatform(pipeline_asset->engine);
+    Platform *platform = EngineGetPlatform(engine);
     RgDevice *device = PlatformGetDevice(platform);
 
     uint8_t *vertex_code = NULL;
@@ -322,7 +302,6 @@ PipelineAsset *PipelineAssetCreateGraphics(
     ModuleInfo vertex_module = {};
     AnalyzeSpirv(
         RG_SHADER_STAGE_VERTEX,
-        true,
         (uint32_t *)vertex_code,
         vertex_code_size / 4,
         &vertex_module);
@@ -331,36 +310,18 @@ PipelineAsset *PipelineAssetCreateGraphics(
     pipeline_info.num_vertex_attributes = vertex_module.attributes_count;
     pipeline_info.vertex_attributes = vertex_module.attributes;
 
-    pipeline_info.pipeline_layout = EngineGetPipelineLayout(engine, pipeline_type);
+    pipeline_info.pipeline_layout = pipeline_layout;
 
-    pipeline_asset->pipeline = rgGraphicsPipelineCreate(
-                device,
-                &pipeline_info);
+    RgPipeline *pipeline = rgGraphicsPipelineCreate(device, &pipeline_info);
 
     Free(allocator, vertex_code);
     Free(allocator, fragment_code);
 
-    return pipeline_asset;
-}
-
-void PipelineAssetDestroy(PipelineAsset *pipeline_asset)
-{
-    Platform *platform = EngineGetPlatform(pipeline_asset->engine);
-    RgDevice *device = PlatformGetDevice(platform);
-
-    rgPipelineDestroy(device, pipeline_asset->pipeline);
-
-    Free(pipeline_asset->allocator, pipeline_asset);
-}
-
-RgPipeline *PipelineAssetGetPipeline(PipelineAsset *pipeline_asset)
-{
-    return pipeline_asset->pipeline;
+    return pipeline;
 }
 
 static void AnalyzeSpirv(
     RgShaderStage stage,
-    bool dynamic_buffers,
     const uint32_t *code,
     size_t code_size,
     ModuleInfo *module)
@@ -487,48 +448,6 @@ static void AnalyzeSpirv(
 
             switch (id->storage_class)
             {
-            case SpvStorageClassUniformConstant:
-            case SpvStorageClassUniform:
-            case SpvStorageClassStorageBuffer: {
-                module->sets_count = max(module->sets_count, id->set + 1);
-
-                SetInfo *set = &module->sets[id->set];
-                set->bindings_count = max(set->bindings_count, id->binding + 1);
-
-                switch (pointed_type->opcode)
-                {
-                case SpvOpTypeImage: set->bindings[id->binding] = RG_DESCRIPTOR_IMAGE; break;
-                case SpvOpTypeSampler: set->bindings[id->binding] = RG_DESCRIPTOR_SAMPLER; break;
-                case SpvOpTypeSampledImage:
-                    set->bindings[id->binding] = RG_DESCRIPTOR_IMAGE_SAMPLER;
-                    break;
-                case SpvOpTypeStruct:
-                    if (pointed_type->is_buffer_block)
-                    {
-                        set->bindings[id->binding] = RG_DESCRIPTOR_STORAGE_BUFFER;
-                        if (dynamic_buffers)
-                        {
-                            set->bindings[id->binding] = RG_DESCRIPTOR_STORAGE_BUFFER_DYNAMIC;
-                        }
-                    }
-                    else if (id->storage_class == SpvStorageClassUniform)
-                    {
-                        set->bindings[id->binding] = RG_DESCRIPTOR_UNIFORM_BUFFER;
-                        if (dynamic_buffers)
-                        {
-                            set->bindings[id->binding] = RG_DESCRIPTOR_UNIFORM_BUFFER_DYNAMIC;
-                        }
-                    }
-                    else
-                    {
-                        assert(0);
-                    }
-
-                    break;
-                }
-                break;
-            }
-
             case SpvStorageClassInput: {
                 if (!id->is_builtin && stage == RG_SHADER_STAGE_VERTEX)
                 {

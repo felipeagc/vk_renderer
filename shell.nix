@@ -19,8 +19,10 @@ pkgs.mkShell {
 		vulkan-validation-layers
 		directx-shader-compiler
 		python3
+		renderdoc
 	];
 
 	LD_LIBRARY_PATH="${pkgs.vulkan-loader}/lib";
+	QT_QPA_PLATFORM="xcb";
 }
 
