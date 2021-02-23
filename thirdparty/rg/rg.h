@@ -495,6 +495,11 @@ void rgCmdBufferWait(RgDevice *device, RgCmdBuffer *cmd_buffer);
 void rgCmdBufferSubmit(RgCmdBuffer *cmd_buffer);
 
 void rgCmdBindPipeline(RgCmdBuffer *cmd_buffer, RgPipeline *pipeline);
+void rgCmdPushConstants(
+        RgCmdBuffer *cmd_buffer,
+        size_t offset,
+        size_t size,
+        const void *data);
 void rgCmdBindDescriptorSet(
         RgCmdBuffer *cmd_buffer,
         uint32_t index,

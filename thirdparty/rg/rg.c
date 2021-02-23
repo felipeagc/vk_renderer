@@ -3383,8 +3383,12 @@ RgPipelineLayout *rgPipelineLayoutCreate(
     pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipeline_layout_info.setLayoutCount = info->set_layout_count;
     pipeline_layout_info.pSetLayouts = vk_set_layouts;
-    pipeline_layout_info.pushConstantRangeCount = 0;
-    pipeline_layout_info.pPushConstantRanges = NULL;
+    pipeline_layout_info.pushConstantRangeCount = 1;
+    pipeline_layout_info.pPushConstantRanges = &(VkPushConstantRange){
+        .stageFlags = VK_SHADER_STAGE_ALL,
+        .offset = 0,
+        .size = 128,
+    };
 
     VK_CHECK(vkCreatePipelineLayout(
         device->device, &pipeline_layout_info, NULL, &pipeline_layout->pipeline_layout));
@@ -4117,6 +4121,21 @@ void rgCmdBindPipeline(RgCmdBuffer *cmd_buffer, RgPipeline *pipeline)
         break;
     }
     }
+}
+
+void rgCmdPushConstants(
+        RgCmdBuffer *cmd_buffer,
+        size_t offset,
+        size_t size,
+        const void *data)
+{
+    vkCmdPushConstants(
+        cmd_buffer->cmd_buffer,
+        cmd_buffer->current_pipeline->layout->pipeline_layout,
+        VK_SHADER_STAGE_ALL,
+        offset,
+        size,
+        data);
 }
 
 void rgCmdBindDescriptorSet(
