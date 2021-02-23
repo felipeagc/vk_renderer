@@ -3,6 +3,10 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct Allocator Allocator;
 typedef struct Engine Engine;
 typedef union Mat4 Mat4;
@@ -24,3 +28,7 @@ ModelAsset *ModelAssetFromMesh(
         Mesh *mesh);
 void ModelAssetDestroy(ModelAsset *model);
 void ModelAssetRender(ModelAsset *model, RgCmdBuffer *cmd_buffer, Mat4 *transform);
+
+#ifdef __cplusplus
+}
+#endif

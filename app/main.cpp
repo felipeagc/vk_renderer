@@ -221,15 +221,16 @@ void AppResize(App *app)
 
         RgDescriptorSetEntry entries[1] = {};
         entries[0].binding = 0;
+        entries[0].descriptor_count = 1;
         entries[0].buffer = UniformArenaGetBuffer(app->uniform_arena);
 
-        RgDescriptorSetInfo info = {
-            EngineGetSetLayout(app->engine, "camera"), // layout
+        app->camera_set = rgDescriptorSetCreate(
+            device, EngineGetSetLayout(app->engine, "camera"));
+        rgDescriptorSetUpdate(
+            device,
+            app->camera_set,
             entries, // entries
-            sizeof(entries) / sizeof(entries[0]), // entry_count
-        };
-
-        app->camera_set = rgDescriptorSetCreate(device, &info);
+            sizeof(entries) / sizeof(entries[0]));
     }
 
     {
@@ -241,18 +242,20 @@ void AppResize(App *app)
 
         RgDescriptorSetEntry entries[2] = {};
         entries[0].binding = 0;
+        entries[0].descriptor_count = 1;
         entries[0].image = app->offscreen_image;
 
         entries[1].binding = 1;
+        entries[1].descriptor_count = 1;
         entries[1].sampler = app->sampler;
 
-        RgDescriptorSetInfo info = {
-            EngineGetSetLayout(app->engine, "postprocess"),
+        app->descriptor_set = rgDescriptorSetCreate(
+            device, EngineGetSetLayout(app->engine, "postprocess"));
+        rgDescriptorSetUpdate(
+            device,
+            app->descriptor_set,
             entries, // entries
-            sizeof(entries) / sizeof(entries[0]), // entry_count
-        };
-
-        app->descriptor_set = rgDescriptorSetCreate(device, &info);
+            sizeof(entries) / sizeof(entries[0]));
     }
 }
 

@@ -292,19 +292,15 @@ typedef struct RgPipelineLayoutInfo
 typedef struct RgDescriptorSetEntry
 {
     uint32_t binding;
+    uint32_t descriptor_count;
+
     RgBuffer *buffer;
     size_t size;
     size_t offset;
+
     RgImage *image;
     RgSampler *sampler;
 } RgDescriptorSetEntry;
-
-typedef struct RgDescriptorSetInfo
-{
-    RgDescriptorSetLayout *layout;
-    RgDescriptorSetEntry *entries;
-    uint32_t entry_count;
-} RgDescriptorSetInfo;
 
 typedef enum RgIndexType
 {
@@ -475,7 +471,12 @@ RgPipelineLayout *rgPipelineLayoutCreate(
         RgDevice *device, const RgPipelineLayoutInfo *info);
 void rgPipelineLayoutDestroy(RgDevice *device, RgPipelineLayout *pipeline_layout);
 
-RgDescriptorSet *rgDescriptorSetCreate(RgDevice *device, const RgDescriptorSetInfo *info);
+RgDescriptorSet *rgDescriptorSetCreate(RgDevice *device, RgDescriptorSetLayout *set_layout);
+void rgDescriptorSetUpdate(
+    RgDevice *device, 
+    RgDescriptorSet *descriptorset,
+    const RgDescriptorSetEntry *entries,
+    uint32_t entry_count);
 void rgDescriptorSetDestroy(RgDevice *device, RgDescriptorSet *descriptor_set);
 
 RgPipeline *rgGraphicsPipelineCreate(RgDevice *device, const RgGraphicsPipelineInfo *info);

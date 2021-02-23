@@ -2,6 +2,10 @@
 
 #include "math.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct Engine Engine;
 
 struct CameraUniform
@@ -28,3 +32,7 @@ struct FPSCamera
 
 void FPSCameraInit(FPSCamera *camera, Engine *engine);
 CameraUniform FPSCameraUpdate(FPSCamera *camera, float delta_time);
+
+#ifdef __cplusplus
+}
+#endif

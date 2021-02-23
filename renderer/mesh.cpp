@@ -139,7 +139,7 @@ Mesh *MeshCreateUVSphere(
                     Vec3 iv = V3((float)i, (float)i, (float)i);
 
                     Vec3 p = origin + (step3 * (iv * right + jv * up));
-                    p = normalize(p) * radius;
+                    p = Vec3Normalize(p) * radius;
 
                     vertices.push_back(Vertex{p, {}, {}, {}});
                 }

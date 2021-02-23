@@ -1735,8 +1735,22 @@ RgDevice *rgDeviceCreate(const RgDeviceInfo *info)
         device->enable_debug_markers = true;
     }
 
+    VkPhysicalDeviceDescriptorIndexingFeatures descriptor_indexing_features = {0};
+    descriptor_indexing_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
+
+    // Enable non-uniform indexing
+    descriptor_indexing_features.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+    descriptor_indexing_features.shaderStorageBufferArrayNonUniformIndexing = VK_TRUE;
+    descriptor_indexing_features.runtimeDescriptorArray = VK_TRUE;
+    descriptor_indexing_features.descriptorBindingUpdateUnusedWhilePending = VK_TRUE;
+    descriptor_indexing_features.descriptorBindingPartiallyBound = VK_TRUE;
+    descriptor_indexing_features.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
+    descriptor_indexing_features.descriptorBindingStorageBufferUpdateAfterBind = VK_TRUE;
+    descriptor_indexing_features.descriptorBindingUniformBufferUpdateAfterBind = VK_TRUE;
+
     VkDeviceCreateInfo device_create_info = {0};
     device_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    device_create_info.pNext = &descriptor_indexing_features;
     device_create_info.queueCreateInfoCount = (uint32_t)queue_create_infos.len;
     device_create_info.pQueueCreateInfos = queue_create_infos.ptr;
     device_create_info.pEnabledFeatures = &device->enabled_features;
@@ -3191,7 +3205,7 @@ static RgDescriptorSetPool *rgDescriptorSetPoolCreate(
 
     VkDescriptorPoolCreateInfo descriptor_pool_info = {0};
     descriptor_pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    descriptor_pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+    descriptor_pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
     descriptor_pool_info.maxSets = pool->set_count;
     descriptor_pool_info.pPoolSizes = pool_sizes.ptr;
     descriptor_pool_info.poolSizeCount = (uint32_t)pool_sizes.len;
@@ -3278,11 +3292,53 @@ RgDescriptorSetLayout *rgDescriptorSetLayoutCreate(
 
     VkDescriptorSetLayoutCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    create_info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
     create_info.bindingCount = set_layout->binding_count;
     create_info.pBindings = set_layout->bindings;
 
+    VkDescriptorBindingFlags *flags =
+        malloc(sizeof(VkDescriptorBindingFlags) * info->entry_count);
+    memset(flags, 0, sizeof(VkDescriptorBindingFlags) * info->entry_count);
+
+    for (uint32_t i = 0; i < info->entry_count; ++i)
+    {
+        switch (info->entries[i].type)
+        {
+        case RG_DESCRIPTOR_STORAGE_BUFFER:
+        case RG_DESCRIPTOR_UNIFORM_BUFFER:
+        case RG_DESCRIPTOR_IMAGE:
+        case RG_DESCRIPTOR_IMAGE_SAMPLER:
+        case RG_DESCRIPTOR_SAMPLER:
+        {
+            flags[i] |=
+                VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
+                VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT |
+                VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT;
+            break;
+        }
+
+        case RG_DESCRIPTOR_UNIFORM_BUFFER_DYNAMIC:
+        case RG_DESCRIPTOR_STORAGE_BUFFER_DYNAMIC:
+        {
+            flags[i] |=
+                VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
+                VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT;
+            break;   
+        }
+        }
+    }
+
+    VkDescriptorSetLayoutBindingFlagsCreateInfo binding_flags = {0};
+    binding_flags.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+    binding_flags.bindingCount = info->entry_count;
+    binding_flags.pBindingFlags = flags;
+
+    create_info.pNext = &binding_flags;
+
     VK_CHECK(vkCreateDescriptorSetLayout(
         device->device, &create_info, NULL, &set_layout->set_layout));
+
+    free(flags);
 
     return set_layout;
 }
@@ -3346,9 +3402,8 @@ void rgPipelineLayoutDestroy(RgDevice *device, RgPipelineLayout *pipeline_layout
 // }}}
 
 // Descriptor set {{{
-RgDescriptorSet *rgDescriptorSetCreate(RgDevice *device, const RgDescriptorSetInfo *info)
+RgDescriptorSet *rgDescriptorSetCreate(RgDevice *device, RgDescriptorSetLayout *set_layout)
 {
-    RgDescriptorSetLayout *set_layout = info->layout;
     RgDescriptorSet *descriptor_set = NULL;
 
     for (int64_t i = set_layout->pools.len-1; i >= 0; --i)
@@ -3377,23 +3432,36 @@ RgDescriptorSet *rgDescriptorSetCreate(RgDevice *device, const RgDescriptorSetIn
             rgDescriptorSetPoolCreate(set_layout, pool_set_count);
         arrPush(&set_layout->pools, new_pool);
 
-        return rgDescriptorSetCreate(device, info);
+        return rgDescriptorSetCreate(device, set_layout);
     }
+
+    return descriptor_set;
+}
+
+void rgDescriptorSetUpdate(
+    RgDevice *device, 
+    RgDescriptorSet *descriptor_set,
+    const RgDescriptorSetEntry *entries,
+    uint32_t entry_count)
+{
+    RgDescriptorSetLayout *set_layout = descriptor_set->pool->set_layout;
 
     VkWriteDescriptorSet writes[RG_MAX_DESCRIPTOR_SET_BINDINGS];
     VkDescriptorBufferInfo buffer_infos[RG_MAX_DESCRIPTOR_SET_BINDINGS];
     VkDescriptorImageInfo image_infos[RG_MAX_DESCRIPTOR_SET_BINDINGS];
-    for (uint32_t i = 0; i < info->entry_count; ++i)
+    for (uint32_t i = 0; i < entry_count; ++i)
     {
         VkWriteDescriptorSet *write = &writes[i];
         memset(write, 0, sizeof(*write));
 
-        RgDescriptorSetEntry *entry = &info->entries[i];
+        const RgDescriptorSetEntry *entry = &entries[i];
+
+        assert(entry->descriptor_count > 0);
 
         write->sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         write->dstSet = descriptor_set->set;
         write->dstBinding = entry->binding;
-        write->descriptorCount = 1;
+        write->descriptorCount = entry->descriptor_count;
         write->descriptorType = set_layout->bindings[entry->binding].descriptorType;
 
         if (entry->buffer)
@@ -3428,9 +3496,7 @@ RgDescriptorSet *rgDescriptorSetCreate(RgDevice *device, const RgDescriptorSetIn
         }
     }
 
-    vkUpdateDescriptorSets(set_layout->device->device, info->entry_count, writes, 0, NULL);
-
-    return descriptor_set;
+    vkUpdateDescriptorSets(device->device, entry_count, writes, 0, NULL);
 }
 
 void rgDescriptorSetDestroy(RgDevice *device, RgDescriptorSet *descriptor_set)

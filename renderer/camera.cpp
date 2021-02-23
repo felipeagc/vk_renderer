@@ -3,7 +3,7 @@
 #include "platform.h"
 #include "engine.h"
 
-void FPSCameraInit(FPSCamera *camera, Engine *engine)
+extern "C" void FPSCameraInit(FPSCamera *camera, Engine *engine)
 {
     *camera = {};
     camera->engine = engine;
@@ -17,7 +17,7 @@ void FPSCameraInit(FPSCamera *camera, Engine *engine)
     camera->speed = 1.0f;
 }
 
-CameraUniform FPSCameraUpdate(FPSCamera *camera, float delta_time)
+extern "C" CameraUniform FPSCameraUpdate(FPSCamera *camera, float delta_time)
 {
     Platform *platform = EngineGetPlatform(camera->engine);
 
@@ -37,14 +37,14 @@ CameraUniform FPSCameraUpdate(FPSCamera *camera, float delta_time)
         camera->pitch = clamp(camera->pitch, radians(-89.0f), radians(89.0f));
     }
 
-    Vec3 front = normalize(V3(
+    Vec3 front = Vec3Normalize(V3(
         sinf(camera->yaw) * cosf(camera->pitch),
         sinf(camera->pitch),
         cosf(camera->yaw) * cosf(camera->pitch)
     ));
 
-    Vec3 right = cross(front, V3(0.0f, 1.0f, 0.0f));
-    Vec3 up = cross(right, front);
+    Vec3 right = Vec3Cross(front, V3(0.0f, 1.0f, 0.0f));
+    Vec3 up = Vec3Cross(right, front);
 
     float delta = camera->speed * delta_time;
     if (PlatformGetKeyState(platform, KEY_W))

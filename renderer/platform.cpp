@@ -54,7 +54,7 @@ struct Platform
     RgSwapchain *swapchain;
 };
 
-void PlatformResizeResources(Platform *platform)
+static void PlatformResizeResources(Platform *platform)
 {
     int width, height;
     glfwGetFramebufferSize(platform->window, &width, &height);
@@ -83,7 +83,7 @@ void PlatformResizeResources(Platform *platform)
     }
 }
 
-Platform *PlatformCreate(Allocator *allocator, const char *window_title)
+extern "C" Platform *PlatformCreate(Allocator *allocator, const char *window_title)
 {
     Platform *platform = (Platform*)Allocate(allocator, sizeof(Platform));
     *platform = {};
@@ -125,7 +125,7 @@ Platform *PlatformCreate(Allocator *allocator, const char *window_title)
     return platform;
 }
 
-void PlatformDestroy(Platform *platform)
+extern "C" void PlatformDestroy(Platform *platform)
 {
     rgSwapchainDestroy(platform->device, platform->swapchain);
     rgDeviceDestroy(platform->device);
@@ -136,23 +136,23 @@ void PlatformDestroy(Platform *platform)
     Free(platform->allocator, platform);
 }
 
-RgDevice *PlatformGetDevice(Platform *platform)
+extern "C" RgDevice *PlatformGetDevice(Platform *platform)
 {
     return platform->device;
 }
 
-RgSwapchain *PlatformGetSwapchain(Platform *platform)
+extern "C" RgSwapchain *PlatformGetSwapchain(Platform *platform)
 {
     return platform->swapchain;
 }
 
-double PlatformGetTime(Platform *platform)
+extern "C" double PlatformGetTime(Platform *platform)
 {
     (void)platform;
     return glfwGetTime();
 }
 
-void PlatformGetWindowSize(Platform *platform, uint32_t *width, uint32_t *height)
+extern "C" void PlatformGetWindowSize(Platform *platform, uint32_t *width, uint32_t *height)
 {
     int iwidth, iheight;
     glfwGetFramebufferSize(platform->window, &iwidth, &iheight);
@@ -160,23 +160,23 @@ void PlatformGetWindowSize(Platform *platform, uint32_t *width, uint32_t *height
     *height = (uint32_t)iheight;
 }
 
-bool PlatformGetCursorEnabled(Platform *platform)
+extern "C" bool PlatformGetCursorEnabled(Platform *platform)
 {
     return glfwGetInputMode(platform->window, GLFW_CURSOR) == GLFW_CURSOR_NORMAL;
 }
 
-void PlatformSetCursorEnabled(Platform *platform, bool enabled)
+extern "C" void PlatformSetCursorEnabled(Platform *platform, bool enabled)
 {
     int mode = enabled ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED;
     glfwSetInputMode(platform->window, GLFW_CURSOR, mode);
 }
 
-void PlatformGetCursorPos(Platform *platform, double *x, double *y)
+extern "C" void PlatformGetCursorPos(Platform *platform, double *x, double *y)
 {
     glfwGetCursorPos(platform->window, x, y);
 }
 
-bool PlatformGetKeyState(Platform *platform, Key key)
+extern "C" bool PlatformGetKeyState(Platform *platform, Key key)
 {
     int state = glfwGetKey(platform->window, key);
     switch (state)
@@ -188,7 +188,7 @@ bool PlatformGetKeyState(Platform *platform, Key key)
     return false;
 }
 
-bool PlatformGetButtonState(Platform *platform, Button button)
+extern "C" bool PlatformGetButtonState(Platform *platform, Button button)
 {
     int state = glfwGetMouseButton(platform->window, button);
     switch (state)
@@ -200,18 +200,18 @@ bool PlatformGetButtonState(Platform *platform, Button button)
     return false;
 }
 
-bool PlatformShouldClose(Platform *platform)
+extern "C" bool PlatformShouldClose(Platform *platform)
 {
     return glfwWindowShouldClose(platform->window);
 }
 
-void PlatformPollEvents(Platform *platform)
+extern "C" void PlatformPollEvents(Platform *platform)
 {
     (void)platform;
     glfwPollEvents();
 }
 
-bool PlatformNextEvent(Platform *platform, Event *event)
+extern "C" bool PlatformNextEvent(Platform *platform, Event *event)
 {
     memset(event, 0, sizeof(Event));
 

@@ -3,6 +3,10 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct Allocator Allocator;
 typedef struct RgImage RgImage;
 typedef struct RgSampler RgSampler;
@@ -35,3 +39,7 @@ RgImage *EngineGetBRDFImage(Engine *engine);
 
 RgPipeline *EngineCreateGraphicsPipeline(Engine *engine, const char *path, const char *type);
 RgPipeline *EngineCreateComputePipeline(Engine *engine, const char *path, const char *type);
+
+#ifdef __cplusplus
+}
+#endif

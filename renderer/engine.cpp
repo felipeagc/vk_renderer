@@ -260,7 +260,7 @@ static void LoadConfig(Engine *engine, const char *spec, size_t spec_size)
     ConfigFree(config);
 }
 
-Engine *EngineCreate(Allocator *allocator, const char *spec, size_t spec_size)
+extern "C" Engine *EngineCreate(Allocator *allocator, const char *spec, size_t spec_size)
 {
     Engine *engine = (Engine*)Allocate(allocator, sizeof(Engine));
     *engine = {};
@@ -331,7 +331,7 @@ Engine *EngineCreate(Allocator *allocator, const char *spec, size_t spec_size)
     return engine;
 }
 
-void EngineDestroy(Engine *engine)
+extern "C" void EngineDestroy(Engine *engine)
 {
     RgDevice *device = PlatformGetDevice(engine->platform);
 
@@ -363,12 +363,12 @@ void EngineDestroy(Engine *engine)
     Free(engine->allocator, engine);
 }
 
-Platform *EngineGetPlatform(Engine *engine)
+extern "C" Platform *EngineGetPlatform(Engine *engine)
 {
     return engine->platform;
 }
 
-RgDescriptorSetLayout *EngineGetSetLayout(Engine *engine, const char *name)
+extern "C" RgDescriptorSetLayout *EngineGetSetLayout(Engine *engine, const char *name)
 {
     RgDescriptorSetLayout *set_layout = nullptr;
     engine->set_layout_map.get(name, &set_layout);
@@ -376,7 +376,7 @@ RgDescriptorSetLayout *EngineGetSetLayout(Engine *engine, const char *name)
     return set_layout;
 }
 
-RgPipelineLayout *EngineGetPipelineLayout(Engine *engine, const char *name)
+extern "C" RgPipelineLayout *EngineGetPipelineLayout(Engine *engine, const char *name)
 {
     RgPipelineLayout *pipeline_layout = nullptr;
     engine->pipeline_layout_map.get(name, &pipeline_layout);
@@ -384,12 +384,12 @@ RgPipelineLayout *EngineGetPipelineLayout(Engine *engine, const char *name)
     return pipeline_layout;
 }
 
-const char *EngineGetExeDir(Engine *engine)
+extern "C" const char *EngineGetExeDir(Engine *engine)
 {
     return engine->exe_dir;
 }
 
-uint8_t *EngineLoadFileRelative(
+extern "C" uint8_t *EngineLoadFileRelative(
     Engine *engine, Allocator *allocator, const char *relative_path, size_t *size)
 {
     size_t path_size = strlen(engine->exe_dir) + 1 + strlen(relative_path) + 1;
@@ -414,27 +414,27 @@ uint8_t *EngineLoadFileRelative(
     return data;
 }
 
-RgImage *EngineGetWhiteImage(Engine *engine)
+extern "C" RgImage *EngineGetWhiteImage(Engine *engine)
 {
     return engine->white_image;
 }
 
-RgImage *EngineGetBlackImage(Engine *engine)
+extern "C" RgImage *EngineGetBlackImage(Engine *engine)
 {
     return engine->black_image;
 }
 
-RgImage *EngineGetBRDFImage(Engine *engine)
+extern "C" RgImage *EngineGetBRDFImage(Engine *engine)
 {
     return engine->brdf_image;
 }
 
-RgSampler *EngineGetDefaultSampler(Engine *engine)
+extern "C" RgSampler *EngineGetDefaultSampler(Engine *engine)
 {
     return engine->default_sampler;
 }
 
-RgPipeline *EngineCreateGraphicsPipeline(Engine *engine, const char *path, const char *type)
+extern "C" RgPipeline *EngineCreateGraphicsPipeline(Engine *engine, const char *path, const char *type)
 {
     RgPipelineLayout *pipeline_layout = EngineGetPipelineLayout(engine, type);
     assert(pipeline_layout);
@@ -453,7 +453,7 @@ RgPipeline *EngineCreateGraphicsPipeline(Engine *engine, const char *path, const
     return pipeline;
 }
 
-RgPipeline *EngineCreateComputePipeline(Engine *engine, const char *path, const char *type)
+extern "C" RgPipeline *EngineCreateComputePipeline(Engine *engine, const char *path, const char *type)
 {
     Platform *platform = EngineGetPlatform(engine);
     RgDevice *device = PlatformGetDevice(platform);

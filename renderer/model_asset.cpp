@@ -115,7 +115,7 @@ static Material MaterialDefault(Engine *engine)
     return material;
 }
 
-ModelAsset *ModelAssetFromGltf(
+extern "C" ModelAsset *ModelAssetFromGltf(
         Allocator *allocator,
         Engine *engine,
         UniformArena *uniform_arena,
@@ -137,7 +137,7 @@ ModelAsset *ModelAssetFromGltf(
     return model;
 }
 
-ModelAsset *ModelAssetFromMesh(
+extern "C" ModelAsset *ModelAssetFromMesh(
         Allocator *allocator,
         Engine *engine,
         UniformArena *uniform_arena,
@@ -201,40 +201,49 @@ ModelAsset *ModelAssetFromMesh(
     {
         RgDescriptorSetEntry entries[8] = {};
         entries[0].binding = 0;
+        entries[0].descriptor_count = 1;
         entries[0].buffer = UniformArenaGetBuffer(uniform_arena);
 
         entries[1].binding = 1;
+        entries[1].descriptor_count = 1;
         entries[1].buffer = UniformArenaGetBuffer(uniform_arena);
 
         entries[2].binding = 2;
+        entries[2].descriptor_count = 1;
         entries[2].sampler = material.albedo_sampler;
 
         entries[3].binding = 3;
+        entries[3].descriptor_count = 1;
         entries[3].image = material.albedo_image;
 
         entries[4].binding = 4;
+        entries[4].descriptor_count = 1;
         entries[4].image = material.normal_image;
 
         entries[5].binding = 5;
+        entries[5].descriptor_count = 1;
         entries[5].image = material.metallic_roughness_image;
 
         entries[6].binding = 6;
+        entries[6].descriptor_count = 1;
         entries[6].image = material.occlusion_image;
 
         entries[7].binding = 7;
+        entries[7].descriptor_count = 1;
         entries[7].image = material.emissive_image;
 
-        RgDescriptorSetInfo info = {};
-        info.layout = material_set_layout;
-        info.entries = entries;
-        info.entry_count = sizeof(entries)/sizeof(entries[0]);
-        material.descriptor_set = rgDescriptorSetCreate(device, &info);
+        material.descriptor_set = rgDescriptorSetCreate(device, material_set_layout);
+        rgDescriptorSetUpdate(
+            device,
+            material.descriptor_set,
+            entries,
+            sizeof(entries)/sizeof(entries[0]));
     }
 
     return model;
 }
 
-void ModelAssetDestroy(ModelAsset *model)
+extern "C" void ModelAssetDestroy(ModelAsset *model)
 {
     Platform *platform = EngineGetPlatform(model->engine);
     RgDevice *device = PlatformGetDevice(platform);
@@ -332,7 +341,7 @@ static void NodeRender(
     }
 }
 
-void ModelAssetRender(ModelAsset *model, RgCmdBuffer *cmd_buffer, Mat4 *transform)
+extern "C" void ModelAssetRender(ModelAsset *model, RgCmdBuffer *cmd_buffer, Mat4 *transform)
 {
     assert(transform);
     rgCmdBindVertexBuffer(cmd_buffer, model->vertex_buffer, 0);

@@ -3,6 +3,10 @@
 #include <rg.h>
 #include "math.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct Engine Engine;
 typedef struct Mesh Mesh;
 typedef struct Allocator Allocator;
@@ -27,3 +31,7 @@ void MeshDestroy(Mesh *mesh);
 RgBuffer *MeshGetVertexBuffer(Mesh* mesh);
 RgBuffer *MeshGetIndexBuffer(Mesh* mesh);
 uint32_t MeshGetIndexCount(Mesh* mesh);
+
+#ifdef __cplusplus
+}
+#endif

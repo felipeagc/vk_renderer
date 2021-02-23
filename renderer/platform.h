@@ -3,6 +3,10 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct Allocator Allocator;
 typedef struct RgDevice RgDevice;
 typedef struct RgSwapchain RgSwapchain;
@@ -249,3 +253,7 @@ bool PlatformGetButtonState(Platform *platform, Button button);
 bool PlatformShouldClose(Platform *platform);
 void PlatformPollEvents(Platform *platform);
 bool PlatformNextEvent(Platform *platform, Event *event);
+
+#ifdef __cplusplus
+}
+#endif
