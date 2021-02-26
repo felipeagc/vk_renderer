@@ -219,10 +219,13 @@ void AppResize(App *app)
             app->camera_set = NULL;
         }
 
-        RgDescriptorSetEntry entries[1] = {};
+        RgDescriptor uniform_descriptor = {.buffer = {UniformArenaGetBuffer(app->uniform_arena), 0, 0}};
+
+        RgDescriptorUpdateInfo entries[1] = {};
         entries[0].binding = 0;
         entries[0].descriptor_count = 1;
-        entries[0].buffer = UniformArenaGetBuffer(app->uniform_arena);
+        entries[0].base_index = 0;
+        entries[0].descriptors = &uniform_descriptor;
 
         app->camera_set = rgDescriptorSetCreate(
             device, EngineGetSetLayout(app->engine, "camera"));
@@ -240,14 +243,19 @@ void AppResize(App *app)
             app->descriptor_set = NULL;
         }
 
-        RgDescriptorSetEntry entries[2] = {};
+        RgDescriptorUpdateInfo entries[2] = {};
+
+        RgDescriptor offscreen_image_descriptor = {.image = {app->offscreen_image, nullptr}};
         entries[0].binding = 0;
         entries[0].descriptor_count = 1;
-        entries[0].image = app->offscreen_image;
+        entries[0].base_index = 0;
+        entries[0].descriptors = &offscreen_image_descriptor;
 
+        RgDescriptor sampler_descriptor = {.image = {nullptr, app->sampler}};
         entries[1].binding = 1;
         entries[1].descriptor_count = 1;
-        entries[1].sampler = app->sampler;
+        entries[1].base_index = 0;
+        entries[1].descriptors = &sampler_descriptor;
 
         app->descriptor_set = rgDescriptorSetCreate(
             device, EngineGetSetLayout(app->engine, "postprocess"));

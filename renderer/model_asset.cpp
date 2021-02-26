@@ -199,38 +199,55 @@ extern "C" ModelAsset *ModelAssetFromMesh(
 
     for (Material &material : model->materials)
     {
-        RgDescriptorSetEntry entries[8] = {};
+        RgBuffer *uniform_buffer = UniformArenaGetBuffer(uniform_arena);
+        RgDescriptor uniform_descriptor = {.buffer = RgDescriptorBuffer{uniform_buffer, 0, 0}};
+
+        RgDescriptorUpdateInfo entries[8] = {};
         entries[0].binding = 0;
         entries[0].descriptor_count = 1;
-        entries[0].buffer = UniformArenaGetBuffer(uniform_arena);
+        entries[0].base_index = 0;
+        entries[0].descriptors = &uniform_descriptor;
 
         entries[1].binding = 1;
         entries[1].descriptor_count = 1;
-        entries[1].buffer = UniformArenaGetBuffer(uniform_arena);
+        entries[1].base_index = 0;
+        entries[1].descriptors = &uniform_descriptor;
 
+        RgDescriptor sampler_descriptor = {.image = RgDescriptorImage{nullptr, material.albedo_sampler}};
         entries[2].binding = 2;
         entries[2].descriptor_count = 1;
-        entries[2].sampler = material.albedo_sampler;
+        entries[2].base_index = 0;
+        entries[2].descriptors = &sampler_descriptor;
 
+        RgDescriptor albedo_descriptor = RgDescriptor{.image = RgDescriptorImage{material.albedo_image, nullptr}};
         entries[3].binding = 3;
         entries[3].descriptor_count = 1;
-        entries[3].image = material.albedo_image;
+        entries[3].base_index = 0;
+        entries[3].descriptors = &albedo_descriptor;
 
+        RgDescriptor normal_descriptor = {.image = RgDescriptorImage{material.normal_image, nullptr}};
         entries[4].binding = 4;
         entries[4].descriptor_count = 1;
-        entries[4].image = material.normal_image;
+        entries[4].base_index = 0;
+        entries[4].descriptors = &normal_descriptor;
 
+        RgDescriptor metallic_roughness_descriptor = {.image = RgDescriptorImage{material.metallic_roughness_image, nullptr}};
         entries[5].binding = 5;
         entries[5].descriptor_count = 1;
-        entries[5].image = material.metallic_roughness_image;
+        entries[5].base_index = 0;
+        entries[5].descriptors = &metallic_roughness_descriptor;
 
+        RgDescriptor occlusion_descriptor = {.image = RgDescriptorImage{material.occlusion_image, nullptr}};
         entries[6].binding = 6;
         entries[6].descriptor_count = 1;
-        entries[6].image = material.occlusion_image;
+        entries[6].base_index = 0;
+        entries[6].descriptors = &occlusion_descriptor;
 
+        RgDescriptor emissive_descriptor = {.image = RgDescriptorImage{material.emissive_image, nullptr}};
         entries[7].binding = 7;
         entries[7].descriptor_count = 1;
-        entries[7].image = material.emissive_image;
+        entries[7].base_index = 0;
+        entries[7].descriptors = &emissive_descriptor;
 
         material.descriptor_set = rgDescriptorSetCreate(device, material_set_layout);
         rgDescriptorSetUpdate(

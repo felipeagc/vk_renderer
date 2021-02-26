@@ -274,12 +274,6 @@ struct RgImage
     VkImageView view;
 };
 
-typedef union RgDescriptor
-{
-    VkDescriptorImageInfo image;
-    VkDescriptorBufferInfo buffer;
-} RgDescriptor;
-
 typedef struct RgDescriptorSetPool RgDescriptorSetPool;
 
 struct RgDescriptorSet
@@ -3362,7 +3356,6 @@ void rgDescriptorSetLayoutDestroy(
 }
 // }}}
 
-
 // Pipeline layout {{{
 RgPipelineLayout *rgPipelineLayoutCreate(
         RgDevice *device, const RgPipelineLayoutInfo *info)
@@ -3445,20 +3438,19 @@ RgDescriptorSet *rgDescriptorSetCreate(RgDevice *device, RgDescriptorSetLayout *
 void rgDescriptorSetUpdate(
     RgDevice *device, 
     RgDescriptorSet *descriptor_set,
-    const RgDescriptorSetEntry *entries,
+    const RgDescriptorUpdateInfo *entries,
     uint32_t entry_count)
 {
     RgDescriptorSetLayout *set_layout = descriptor_set->pool->set_layout;
 
-    VkWriteDescriptorSet writes[RG_MAX_DESCRIPTOR_SET_BINDINGS];
-    VkDescriptorBufferInfo buffer_infos[RG_MAX_DESCRIPTOR_SET_BINDINGS];
-    VkDescriptorImageInfo image_infos[RG_MAX_DESCRIPTOR_SET_BINDINGS];
+    VkWriteDescriptorSet *writes = malloc(sizeof(VkWriteDescriptorSet) * entry_count);
+    memset(writes, 0, sizeof(*writes) * entry_count);
+
     for (uint32_t i = 0; i < entry_count; ++i)
     {
         VkWriteDescriptorSet *write = &writes[i];
-        memset(write, 0, sizeof(*write));
 
-        const RgDescriptorSetEntry *entry = &entries[i];
+        const RgDescriptorUpdateInfo *entry = &entries[i];
 
         assert(entry->descriptor_count > 0);
 
@@ -3468,39 +3460,112 @@ void rgDescriptorSetUpdate(
         write->descriptorCount = entry->descriptor_count;
         write->descriptorType = set_layout->bindings[entry->binding].descriptorType;
 
-        if (entry->buffer)
+        switch (write->descriptorType)
         {
-            VkDescriptorBufferInfo *buffer_info = &buffer_infos[i];
-            write->pBufferInfo = buffer_info;
-
-            buffer_info->buffer = entry->buffer->buffer;
-            buffer_info->offset = entry->offset;
-            buffer_info->range = entry->size;
-            if (entry->size == 0)
+        case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+        case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
+        case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+        case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
+        {
+            VkDescriptorBufferInfo *buffer_infos =
+                malloc(sizeof(VkDescriptorBufferInfo) * entry->descriptor_count);
+            for (uint32_t j = 0; j < entry->descriptor_count; ++j)
             {
-                buffer_info->range = VK_WHOLE_SIZE;
+                RgDescriptor *descriptor = &entry->descriptors[j];
+                VkDescriptorBufferInfo *buffer_info = &buffer_infos[j];
+                buffer_info->buffer = descriptor->buffer.buffer->buffer;
+                buffer_info->offset = descriptor->buffer.offset;
+                buffer_info->range = (descriptor->buffer.size == 0)
+                    ? VK_WHOLE_SIZE : descriptor->buffer.size;
             }
+            write->pBufferInfo = buffer_infos;
+            break;
         }
-
-        if (entry->image)
+        case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
         {
-            VkDescriptorImageInfo *image_info = &image_infos[i];
-            write->pImageInfo = image_info;
-
-            image_info->imageView = entry->image->view;
-            image_info->imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            VkDescriptorImageInfo *image_infos =
+                malloc(sizeof(VkDescriptorImageInfo) * entry->descriptor_count);
+            for (uint32_t j = 0; j < entry->descriptor_count; ++j)
+            {
+                RgDescriptor *descriptor = &entry->descriptors[j];
+                VkDescriptorImageInfo *image_info = &image_infos[j];
+                image_info->imageView = descriptor->image.image->view;
+                image_info->imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                image_info->sampler = VK_NULL_HANDLE;
+            }
+            write->pImageInfo = image_infos;
+            break;
         }
-
-        if (entry->sampler)
+        case VK_DESCRIPTOR_TYPE_SAMPLER:
         {
-            VkDescriptorImageInfo *image_info = &image_infos[i];
-            write->pImageInfo = image_info;
-
-            image_info->sampler = entry->sampler->sampler;
+            VkDescriptorImageInfo *image_infos =
+                malloc(sizeof(VkDescriptorImageInfo) * entry->descriptor_count);
+            for (uint32_t j = 0; j < entry->descriptor_count; ++j)
+            {
+                RgDescriptor *descriptor = &entry->descriptors[j];
+                VkDescriptorImageInfo *image_info = &image_infos[j];
+                image_info->sampler = descriptor->image.sampler->sampler;
+                image_info->imageView = VK_NULL_HANDLE;
+                image_info->imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            }
+            write->pImageInfo = image_infos;
+            break;
+        }
+        case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+        {
+            VkDescriptorImageInfo *image_infos =
+                malloc(sizeof(VkDescriptorImageInfo) * entry->descriptor_count);
+            for (uint32_t j = 0; j < entry->descriptor_count; ++j)
+            {
+                RgDescriptor *descriptor = &entry->descriptors[j];
+                VkDescriptorImageInfo *image_info = &image_infos[j];
+                image_info->imageView = descriptor->image.image->view;
+                image_info->imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                image_info->sampler = descriptor->image.sampler->sampler;
+            }
+            write->pImageInfo = image_infos;
+            break;
+        }
+        default:
+        {
+            assert(0);
+            break;
+        }
         }
     }
 
     vkUpdateDescriptorSets(device->device, entry_count, writes, 0, NULL);
+
+    for (uint32_t i = 0; i < entry_count; ++i)
+    {
+        VkWriteDescriptorSet *write = &writes[i];
+
+        switch (write->descriptorType)
+        {
+        case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+        case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
+        case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+        case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
+        {
+            free((void*)write->pBufferInfo);
+            break;
+        }
+        case VK_DESCRIPTOR_TYPE_SAMPLER:
+        case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+        case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+        {
+            free((void*)write->pImageInfo);
+            break;
+        }
+        default:
+        {
+            assert(0);
+            break;
+        }
+        }
+    }
+
+    free(writes);
 }
 
 void rgDescriptorSetDestroy(RgDevice *device, RgDescriptorSet *descriptor_set)
