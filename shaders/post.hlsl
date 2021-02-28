@@ -1,5 +1,13 @@
-[[vk::binding(0, 0)]] Texture2D<float4> gImage;
-[[vk::binding(1, 0)]] SamplerState gSampler;
+[[vk::binding(1)]] Texture2D<float4> textures[];
+[[vk::binding(2)]] SamplerState samplers[];
+
+struct Indices
+{
+	uint offscreen_image_index;
+	uint sampler_index;
+};
+
+[[vk::push_constant]] Indices pc;
 
 void vertex(
 	in uint vertexIndex : SV_VertexID,
@@ -15,6 +23,9 @@ void pixel(
 	in float2 uv : TEXCOORD0,
 	out float4 fragColor : SV_Target)
 {
-    float3 col = gImage.Sample(gSampler, uv).xyz;
+	Texture2D<float4> offscreen_image = textures[pc.offscreen_image_index];
+	SamplerState offscreen_sampler = samplers[pc.sampler_index];
+
+    float3 col = offscreen_image.Sample(offscreen_sampler, uv).xyz;
 	fragColor = float4(col, 1.0);
 }

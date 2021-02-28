@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.1)
 project(renderer VERSION 1.0 LANGUAGES C CXX)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 add_library(
   renderer
 
@@ -10,6 +12,8 @@ add_library(
   renderer/math.h
   renderer/allocator.h
   renderer/allocator.c
+  renderer/pool.h
+  renderer/pool.cpp
   renderer/format.h
   renderer/format.cpp
   renderer/lexer.h

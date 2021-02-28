@@ -12,6 +12,7 @@
 #include "config.h"
 #include "pipeline_util.h"
 #include "pbr.h"
+#include "pool.h"
 #include <tinyshader/tinyshader.h>
 
 #if defined(_MSC_VER)
@@ -91,6 +92,14 @@ struct Engine
 
     StringMap<RgPipelineLayout *> pipeline_layout_map;
     StringMap<RgDescriptorSetLayout *> set_layout_map;
+
+    RgDescriptorSetLayout *global_set_layout;
+    RgPipelineLayout *global_pipeline_layout;
+    RgDescriptorSet *global_descriptor_set;
+
+    Pool *storage_buffer_pool;
+    Pool *texture_pool;
+    Pool *sampler_pool;
 };
 
 static void LoadConfig(Engine *engine, const char *spec, size_t spec_size)
@@ -273,6 +282,46 @@ extern "C" Engine *EngineCreate(Allocator *allocator, const char *spec, size_t s
 
     RgDevice *device = PlatformGetDevice(engine->platform);
 
+    engine->storage_buffer_pool = PoolCreate(engine->allocator, 4 * 1024);
+    engine->texture_pool = PoolCreate(engine->allocator, 4 * 1024);
+    engine->sampler_pool = PoolCreate(engine->allocator, 4 * 1024);
+
+    {
+        RgDescriptorSetLayoutEntry entries[] = {
+            {
+                0, // binding
+                RG_DESCRIPTOR_STORAGE_BUFFER, // type
+                RG_SHADER_STAGE_ALL, // shader_stages
+                PoolGetSlotCount(engine->storage_buffer_pool), // count
+            },
+            {
+                1, // binding
+                RG_DESCRIPTOR_IMAGE, // type
+                RG_SHADER_STAGE_ALL, // shader_stages
+                PoolGetSlotCount(engine->texture_pool), // count
+            },
+            {
+                2, // binding
+                RG_DESCRIPTOR_SAMPLER, // type
+                RG_SHADER_STAGE_ALL, // shader_stages
+                PoolGetSlotCount(engine->sampler_pool), // count
+            },
+        };
+
+        RgDescriptorSetLayoutInfo info = {};
+        info.entries = entries;
+        info.entry_count = sizeof(entries) / sizeof(entries[0]);
+
+        engine->global_set_layout = rgDescriptorSetLayoutCreate(device, &info);
+
+        RgPipelineLayoutInfo pipeline_layout_info = {};
+        pipeline_layout_info.set_layouts = &engine->global_set_layout;
+        pipeline_layout_info.set_layout_count = 1;
+        engine->global_pipeline_layout = rgPipelineLayoutCreate(device, &pipeline_layout_info);
+
+        engine->global_descriptor_set = rgDescriptorSetCreate(device, engine->global_set_layout);
+    }
+
     engine->pipeline_layout_map = StringMap<RgPipelineLayout *>::create(allocator);
     engine->set_layout_map = StringMap<RgDescriptorSetLayout *>::create(allocator);
 
@@ -345,6 +394,10 @@ extern "C" void EngineDestroy(Engine *engine)
         rgDescriptorSetLayoutDestroy(device, slot.value);
     }
 
+    rgPipelineLayoutDestroy(device, engine->global_pipeline_layout);
+    rgDescriptorSetDestroy(device, engine->global_descriptor_set);
+    rgDescriptorSetLayoutDestroy(device, engine->global_set_layout);
+
     rgImageDestroy(device, engine->brdf_image);
     rgImageDestroy(device, engine->white_image);
     rgImageDestroy(device, engine->black_image);
@@ -354,6 +407,10 @@ extern "C" void EngineDestroy(Engine *engine)
 
     engine->pipeline_layout_map.free();
     engine->set_layout_map.free();
+
+    PoolDestroy(engine->storage_buffer_pool);
+    PoolDestroy(engine->texture_pool);
+    PoolDestroy(engine->sampler_pool);
 
     PlatformDestroy(engine->platform);
 
@@ -508,4 +565,156 @@ extern "C" RgPipeline *EngineCreateComputePipeline(Engine *engine, const char *p
     Free(engine->allocator, hlsl);
 
     return pipeline;
+}
+
+extern "C" RgPipeline *EngineCreateGraphicsPipeline2(Engine *engine, const char *path)
+{
+    RgPipelineLayout *pipeline_layout = engine->global_pipeline_layout;
+    assert(pipeline_layout);
+
+    size_t hlsl_size = 0;
+    char *hlsl = (char*)
+        EngineLoadFileRelative(engine, engine->allocator, path, &hlsl_size);
+    assert(hlsl);
+
+    RgPipeline *pipeline =
+        PipelineUtilCreateGraphicsPipeline(engine, engine->allocator, pipeline_layout, hlsl, hlsl_size);
+    assert(pipeline);
+
+    Free(engine->allocator, hlsl);
+
+    return pipeline;
+}
+
+RgPipelineLayout *EngineGetGlobalPipelineLayout(Engine *engine)
+{
+    return engine->global_pipeline_layout;
+}
+
+RgDescriptorSet *EngineGetGlobalDescriptorSet(Engine *engine)
+{
+    return engine->global_descriptor_set;
+}
+
+static uint32_t EngineAllocateDescriptor(
+    Engine *engine,
+    Pool *pool,
+    uint32_t binding,
+    const RgDescriptor *descriptor)
+{
+    assert(engine->global_descriptor_set);
+
+    uint32_t handle = PoolAllocateSlot(pool);
+    if (handle == UINT32_MAX) return handle;
+
+    Platform *platform = EngineGetPlatform(engine);
+    RgDevice *device = PlatformGetDevice(platform);
+
+    RgDescriptorUpdateInfo entry = {};
+    entry.binding = binding;
+    entry.base_index = handle;
+    entry.descriptor_count = 1;
+    entry.descriptors = descriptor;
+
+    rgDescriptorSetUpdate(device, engine->global_descriptor_set, &entry, 1);
+
+    return handle;
+}
+
+static void EngineFreeDescriptor(Engine *engine, Pool *pool, uint32_t handle)
+{
+    (void)engine;
+    PoolFreeSlot(pool, handle);
+}
+
+extern "C" BufferHandle EngineAllocateStorageBufferHandle(Engine *engine, RgBufferInfo *info)
+{
+    Platform *platform = EngineGetPlatform(engine);
+    RgDevice *device = PlatformGetDevice(platform);
+
+	BufferHandle handle = {};
+	handle.buffer = rgBufferCreate(device, info);
+
+    RgDescriptor descriptor = {};
+    descriptor.buffer.buffer = handle.buffer;
+    descriptor.buffer.offset = 0;
+    descriptor.buffer.size = 0;
+
+	handle.index = EngineAllocateDescriptor(
+        engine,
+        engine->storage_buffer_pool,
+        0,
+        &descriptor);
+
+	assert(handle.index != UINT32_MAX);
+
+	return handle;
+}
+
+extern "C" void EngineFreeStorageBufferHandle(Engine *engine, BufferHandle *handle)
+{
+    Platform *platform = EngineGetPlatform(engine);
+    RgDevice *device = PlatformGetDevice(platform);
+    EngineFreeDescriptor(engine, engine->storage_buffer_pool, handle->index);
+	rgBufferDestroy(device, handle->buffer);
+}
+
+extern "C" ImageHandle EngineAllocateImageHandle(Engine *engine, RgImageInfo *info)
+{
+    Platform *platform = EngineGetPlatform(engine);
+    RgDevice *device = PlatformGetDevice(platform);
+
+	ImageHandle handle = {};
+	handle.image = rgImageCreate(device, info);
+
+    RgDescriptor descriptor = {};
+    descriptor.image.image = handle.image;
+
+	handle.index = EngineAllocateDescriptor(
+        engine,
+        engine->texture_pool,
+        1,
+        &descriptor);
+
+	assert(handle.index != UINT32_MAX);
+
+	return handle;
+}
+
+extern "C" void EngineFreeImageHandle(Engine *engine, ImageHandle *handle)
+{
+    Platform *platform = EngineGetPlatform(engine);
+    RgDevice *device = PlatformGetDevice(platform);
+    EngineFreeDescriptor(engine, engine->texture_pool, handle->index);
+	rgImageDestroy(device, handle->image);
+}
+
+extern "C" SamplerHandle EngineAllocateSamplerHandle(Engine *engine, RgSamplerInfo *info)
+{
+    Platform *platform = EngineGetPlatform(engine);
+    RgDevice *device = PlatformGetDevice(platform);
+
+	SamplerHandle handle = {};
+	handle.sampler = rgSamplerCreate(device, info);
+
+    RgDescriptor descriptor = {};
+    descriptor.image.sampler = handle.sampler;
+
+	handle.index = EngineAllocateDescriptor(
+        engine,
+        engine->sampler_pool,
+        2,
+        &descriptor);
+
+	assert(handle.index != UINT32_MAX);
+
+	return handle;
+}
+
+extern "C" void EngineFreeSamplerHandle(Engine *engine, SamplerHandle *handle)
+{
+    Platform *platform = EngineGetPlatform(engine);
+    RgDevice *device = PlatformGetDevice(platform);
+    EngineFreeDescriptor(engine, engine->sampler_pool, handle->index);
+	rgSamplerDestroy(device, handle->sampler);
 }

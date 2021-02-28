@@ -3471,7 +3471,7 @@ void rgDescriptorSetUpdate(
                 malloc(sizeof(VkDescriptorBufferInfo) * entry->descriptor_count);
             for (uint32_t j = 0; j < entry->descriptor_count; ++j)
             {
-                RgDescriptor *descriptor = &entry->descriptors[j];
+                const RgDescriptor *descriptor = &entry->descriptors[j];
                 VkDescriptorBufferInfo *buffer_info = &buffer_infos[j];
                 buffer_info->buffer = descriptor->buffer.buffer->buffer;
                 buffer_info->offset = descriptor->buffer.offset;
@@ -3487,7 +3487,7 @@ void rgDescriptorSetUpdate(
                 malloc(sizeof(VkDescriptorImageInfo) * entry->descriptor_count);
             for (uint32_t j = 0; j < entry->descriptor_count; ++j)
             {
-                RgDescriptor *descriptor = &entry->descriptors[j];
+                const RgDescriptor *descriptor = &entry->descriptors[j];
                 VkDescriptorImageInfo *image_info = &image_infos[j];
                 image_info->imageView = descriptor->image.image->view;
                 image_info->imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -3502,7 +3502,7 @@ void rgDescriptorSetUpdate(
                 malloc(sizeof(VkDescriptorImageInfo) * entry->descriptor_count);
             for (uint32_t j = 0; j < entry->descriptor_count; ++j)
             {
-                RgDescriptor *descriptor = &entry->descriptors[j];
+                const RgDescriptor *descriptor = &entry->descriptors[j];
                 VkDescriptorImageInfo *image_info = &image_infos[j];
                 image_info->sampler = descriptor->image.sampler->sampler;
                 image_info->imageView = VK_NULL_HANDLE;
@@ -3517,7 +3517,7 @@ void rgDescriptorSetUpdate(
                 malloc(sizeof(VkDescriptorImageInfo) * entry->descriptor_count);
             for (uint32_t j = 0; j < entry->descriptor_count; ++j)
             {
-                RgDescriptor *descriptor = &entry->descriptors[j];
+                const RgDescriptor *descriptor = &entry->descriptors[j];
                 VkDescriptorImageInfo *image_info = &image_infos[j];
                 image_info->imageView = descriptor->image.image->view;
                 image_info->imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;

@@ -47,6 +47,14 @@ struct Array
         this->length++;
     }
 
+    void pop_back()
+    {
+        if (this->length > 0)
+        {
+            this->length--;   
+        }
+    }
+
     void free()
     {
         Free(this->allocator, this->ptr);

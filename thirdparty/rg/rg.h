@@ -313,7 +313,7 @@ typedef struct RgDescriptorUpdateInfo
     uint32_t binding;
     uint32_t base_index;
     uint32_t descriptor_count;
-    RgDescriptor *descriptors;
+    const RgDescriptor *descriptors;
 } RgDescriptorUpdateInfo;
 
 typedef enum RgIndexType

@@ -46,7 +46,7 @@ static const char *engine_spec = R"(
 struct App
 {
     Engine *engine;
-    RgImage *offscreen_image;
+	ImageHandle offscreen_image;
     RgImage *offscreen_depth_image;
     RgRenderPass *offscreen_pass;
 
@@ -57,13 +57,12 @@ struct App
     double last_time;
     double delta_time;
 
-    RgSampler *sampler;
+	SamplerHandle sampler;
 
     RgPipeline *offscreen_pipeline;
     RgPipeline *backbuffer_pipeline;
 
     RgDescriptorSet *camera_set;
-    RgDescriptorSet *descriptor_set;
 
     UniformArena *uniform_arena;
     FPSCamera camera;
@@ -99,7 +98,7 @@ App *AppCreate()
         .address_mode = RG_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT,
         .border_color = RG_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK,
     };
-    app->sampler = rgSamplerCreate(device, &sampler_info);
+    app->sampler = EngineAllocateSamplerHandle(app->engine, &sampler_info);
 
     //
     // Offscreen pipeline
@@ -110,8 +109,7 @@ App *AppCreate()
     //
     // Backbuffer pipeline
     //
-    app->backbuffer_pipeline =
-        EngineCreateGraphicsPipeline(app->engine, "../shaders/post.hlsl", "postprocess");
+    app->backbuffer_pipeline = EngineCreateGraphicsPipeline2(app->engine, "../shaders/post.hlsl");
 
     app->cmd_pool = rgCmdPoolCreate(device, RG_QUEUE_TYPE_GRAPHICS);
     app->cmd_buffers[0] = rgCmdBufferCreate(device, app->cmd_pool);
@@ -141,14 +139,13 @@ void AppDestroy(App *app)
     UniformArenaDestroy(app->uniform_arena);
 
     rgDescriptorSetDestroy(device, app->camera_set);
-    rgDescriptorSetDestroy(device, app->descriptor_set);
 
     rgPipelineDestroy(device, app->offscreen_pipeline);
     rgPipelineDestroy(device, app->backbuffer_pipeline);
 
-    rgSamplerDestroy(device, app->sampler);
+	EngineFreeSamplerHandle(app->engine, &app->sampler);
 
-    rgImageDestroy(device, app->offscreen_image);
+	EngineFreeImageHandle(app->engine, &app->offscreen_image);
     rgImageDestroy(device, app->offscreen_depth_image);
     rgRenderPassDestroy(device, app->offscreen_pass);
 
@@ -173,9 +170,9 @@ void AppResize(App *app)
     {
         rgRenderPassDestroy(device, app->offscreen_pass);
     }
-    if (app->offscreen_image)
+    if (app->offscreen_image.image)
     {
-        rgImageDestroy(device, app->offscreen_image);
+		EngineFreeImageHandle(app->engine, &app->offscreen_image);
     }
     if (app->offscreen_depth_image)
     {
@@ -191,7 +188,7 @@ void AppResize(App *app)
         .mip_count = 1,
         .layer_count = 1,
     };
-    app->offscreen_image = rgImageCreate(device, &offscreen_image_info);
+    app->offscreen_image = EngineAllocateImageHandle(app->engine, &offscreen_image_info);
 
     RgImageInfo offscreen_depth_image_info = {
         .extent = { width, height, 1 },
@@ -205,7 +202,7 @@ void AppResize(App *app)
     app->offscreen_depth_image = rgImageCreate(device, &offscreen_depth_image_info);
 
     RgRenderPassInfo render_pass_info = {
-        .color_attachments = &app->offscreen_image,
+        .color_attachments = &app->offscreen_image.image,
         .color_attachment_count = 1,
 
         .depth_stencil_attachment = app->offscreen_depth_image,
@@ -232,36 +229,6 @@ void AppResize(App *app)
         rgDescriptorSetUpdate(
             device,
             app->camera_set,
-            entries, // entries
-            sizeof(entries) / sizeof(entries[0]));
-    }
-
-    {
-        if (app->descriptor_set)
-        {
-            rgDescriptorSetDestroy(device, app->descriptor_set);
-            app->descriptor_set = NULL;
-        }
-
-        RgDescriptorUpdateInfo entries[2] = {};
-
-        RgDescriptor offscreen_image_descriptor = {.image = {app->offscreen_image, nullptr}};
-        entries[0].binding = 0;
-        entries[0].descriptor_count = 1;
-        entries[0].base_index = 0;
-        entries[0].descriptors = &offscreen_image_descriptor;
-
-        RgDescriptor sampler_descriptor = {.image = {nullptr, app->sampler}};
-        entries[1].binding = 1;
-        entries[1].descriptor_count = 1;
-        entries[1].base_index = 0;
-        entries[1].descriptors = &sampler_descriptor;
-
-        app->descriptor_set = rgDescriptorSetCreate(
-            device, EngineGetSetLayout(app->engine, "postprocess"));
-        rgDescriptorSetUpdate(
-            device,
-            app->descriptor_set,
             entries, // entries
             sizeof(entries) / sizeof(entries[0]));
     }
@@ -306,7 +273,16 @@ void AppRenderFrame(App *app)
     rgCmdSetRenderPass(cmd_buffer, backbuffer_pass, 1, backbuffer_clear_values);
 
     rgCmdBindPipeline(cmd_buffer, app->backbuffer_pipeline);
-    rgCmdBindDescriptorSet(cmd_buffer, 0, app->descriptor_set, 0, NULL);
+    rgCmdBindDescriptorSet(cmd_buffer, 0, EngineGetGlobalDescriptorSet(app->engine), 0, NULL);
+
+    struct
+    {
+        uint32_t offscreen_image_index;
+        uint32_t sampler_index;
+    } pc;
+    pc.offscreen_image_index = app->offscreen_image.index;
+    pc.sampler_index = app->sampler.index;
+    rgCmdPushConstants(cmd_buffer, 0, sizeof(pc), &pc);
 
     rgCmdDraw(cmd_buffer, 3, 1, 0, 0);
 
