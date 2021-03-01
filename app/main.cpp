@@ -200,6 +200,8 @@ void AppRenderFrame(App *app)
 
     Mat4 transform = Mat4Diagonal(1.0f);
     ModelAssetRender(app->model_asset, cmd_buffer, &transform);
+    Mat4Translate(&transform, V3(1.0, 1.0, 1.0));
+    ModelAssetRender(app->model_asset, cmd_buffer, &transform);
 
     // Backbuffer pass
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdalign.h>
 #include "math.h"
 
 #ifdef __cplusplus
@@ -8,7 +9,7 @@ extern "C" {
 
 typedef struct Engine Engine;
 
-typedef struct CameraUniform
+typedef struct alignas(16) CameraUniform
 {
     Vec4 pos;
     Mat4 view;

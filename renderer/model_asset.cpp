@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <stdalign.h>
 #include <rg.h>
 #include "math.h"
 #include "array.hpp"
@@ -24,12 +25,12 @@ struct ModelManager
 	uint32_t current_camera_index;
 };
 
-struct ModelUniform
+struct alignas(16) ModelUniform
 {
 	Mat4 transform;
 };
 
-struct MaterialUniform
+struct alignas(16) MaterialUniform
 {
     Vec4 base_color;
     Vec4 emissive;

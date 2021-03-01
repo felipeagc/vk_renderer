@@ -9,7 +9,7 @@ struct Camera
 
 struct Model
 {
-	float4x4 matrix;
+	float4x4 transform;
 };
 
 struct Material
@@ -65,10 +65,11 @@ struct VsOutput
 
 VsOutput vertex(in VsInput vs_in)
 {
+	Model model = model_buffers[pc.model_buffer_index][pc.model_index];
 	Camera camera = camera_buffers[pc.camera_buffer_index][pc.camera_index];
 
     VsOutput vs_out;
-	vs_out.sv_pos = mul(mul(camera.proj, camera.view), float4(vs_in.pos, 1.0));
+	vs_out.sv_pos = mul(mul(camera.proj, mul(camera.view, model.transform)), float4(vs_in.pos, 1.0));
 	vs_out.uv = vs_in.uv;
     return vs_out;
 }
