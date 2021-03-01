@@ -26,12 +26,12 @@ add_library(
 
   renderer/engine.h
   renderer/engine.cpp
+  renderer/buffer_pool.h
+  renderer/buffer_pool.c
   renderer/camera.h
   renderer/camera.cpp
   renderer/mesh.h
   renderer/mesh.cpp
-  renderer/uniform_arena.h
-  renderer/uniform_arena.cpp
   renderer/model_asset.h
   renderer/model_asset.cpp
   renderer/pipeline_util.h

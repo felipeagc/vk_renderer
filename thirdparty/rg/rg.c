@@ -710,20 +710,13 @@ static VkDescriptorType rgDescriptorTypeToVk(RgDescriptorType type)
 {
     switch (type)
     {
-    case RG_DESCRIPTOR_UNIFORM_BUFFER:
-        return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    case RG_DESCRIPTOR_UNIFORM_BUFFER_DYNAMIC:
-        return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-    case RG_DESCRIPTOR_STORAGE_BUFFER:
-        return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    case RG_DESCRIPTOR_STORAGE_BUFFER_DYNAMIC:
-        return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC;
-    case RG_DESCRIPTOR_IMAGE:
-        return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-    case RG_DESCRIPTOR_SAMPLER:
-        return VK_DESCRIPTOR_TYPE_SAMPLER;
-    case RG_DESCRIPTOR_IMAGE_SAMPLER:
-        return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    case RG_DESCRIPTOR_UNIFORM_BUFFER: return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    case RG_DESCRIPTOR_UNIFORM_BUFFER_DYNAMIC: return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+    case RG_DESCRIPTOR_STORAGE_BUFFER: return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    case RG_DESCRIPTOR_STORAGE_BUFFER_DYNAMIC: return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC;
+    case RG_DESCRIPTOR_IMAGE: return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    case RG_DESCRIPTOR_SAMPLER: return VK_DESCRIPTOR_TYPE_SAMPLER;
+    case RG_DESCRIPTOR_IMAGE_SAMPLER: return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     }
     assert(0);
     return 0;
@@ -3457,6 +3450,7 @@ void rgDescriptorSetUpdate(
         write->sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         write->dstSet = descriptor_set->set;
         write->dstBinding = entry->binding;
+        write->dstArrayElement = entry->base_index;
         write->descriptorCount = entry->descriptor_count;
         write->descriptorType = set_layout->bindings[entry->binding].descriptorType;
 

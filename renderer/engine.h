@@ -39,15 +39,9 @@ typedef struct BufferHandle
 	uint32_t index;
 } BufferHandle;
 
-Engine *EngineCreate(Allocator *allocator, const char *spec, size_t spec_size);
+Engine *EngineCreate(Allocator *allocator);
 void EngineDestroy(Engine *engine);
 Platform *EngineGetPlatform(Engine *engine);
-
-RgDescriptorSetLayout *
-EngineGetSetLayout(Engine *engine, const char *name);
-
-RgPipelineLayout *
-EngineGetPipelineLayout(Engine *engine, const char *name);
 
 const char *EngineGetExeDir(Engine *engine);
 
@@ -55,15 +49,13 @@ const char *EngineGetExeDir(Engine *engine);
 uint8_t *
 EngineLoadFileRelative(Engine *engine, Allocator *allocator, const char *relative_path, size_t *size);
 
-RgImage *EngineGetWhiteImage(Engine *engine);
-RgImage *EngineGetBlackImage(Engine *engine);
-RgSampler *EngineGetDefaultSampler(Engine *engine);
-RgImage *EngineGetBRDFImage(Engine *engine);
+ImageHandle EngineGetWhiteImage(Engine *engine);
+ImageHandle EngineGetBlackImage(Engine *engine);
+SamplerHandle EngineGetDefaultSampler(Engine *engine);
+ImageHandle EngineGetBRDFImage(Engine *engine);
 
-RgPipeline *EngineCreateGraphicsPipeline(Engine *engine, const char *path, const char *type);
-RgPipeline *EngineCreateComputePipeline(Engine *engine, const char *path, const char *type);
-
-RgPipeline *EngineCreateGraphicsPipeline2(Engine *engine, const char *path);
+RgPipeline *EngineCreateGraphicsPipeline(Engine *engine, const char *path);
+RgPipeline *EngineCreateComputePipeline(Engine *engine, const char *path);
 
 RgPipelineLayout *EngineGetGlobalPipelineLayout(Engine *engine);
 RgDescriptorSet *EngineGetGlobalDescriptorSet(Engine *engine);

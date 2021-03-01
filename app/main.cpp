@@ -6,42 +6,7 @@
 #include <renderer/math.h>
 #include <renderer/mesh.h>
 #include <renderer/allocator.h>
-#include <renderer/uniform_arena.h>
 #include <renderer/model_asset.h>
-
-static const char *engine_spec = R"(
-{
-    pipeline_layouts: {
-        standard: {
-            set_layouts: [ "camera", "model" ],
-        },
-        postprocess: {
-            set_layouts: [ "postprocess" ],
-        },
-        brdf: { set_layouts: [] },
-    },
-
-    set_layouts: {
-        camera: [
-            { type: "uniform_buffer", stages: ["vertex", "fragment"] },
-        ],
-        model: [
-            { type: "uniform_buffer", stages: ["vertex", "fragment"] },
-            { type: "uniform_buffer", stages: ["vertex", "fragment"] },
-            { type: "sampler", stages: ["fragment"] },
-            { type: "image", stages: ["fragment"] },
-            { type: "image", stages: ["fragment"] },
-            { type: "image", stages: ["fragment"] },
-            { type: "image", stages: ["fragment"] },
-            { type: "image", stages: ["fragment"] },
-        ],
-        postprocess: [
-            { type: "image", stages: ["fragment"] },
-            { type: "sampler", stages: ["fragment"] },
-        ],
-    },
-}
-)";
 
 struct App
 {
@@ -62,9 +27,7 @@ struct App
     RgPipeline *offscreen_pipeline;
     RgPipeline *backbuffer_pipeline;
 
-    RgDescriptorSet *camera_set;
-
-    UniformArena *uniform_arena;
+	ModelManager *model_manager;
     FPSCamera camera;
     ModelAsset *model_asset;
     Mesh *cube_mesh;
@@ -80,7 +43,7 @@ App *AppCreate()
 {
     App *app = new App();
 
-    app->engine = EngineCreate(NULL, engine_spec, strlen(engine_spec));
+    app->engine = EngineCreate(NULL);
 
     Platform *platform = EngineGetPlatform(app->engine);
     RgDevice *device = PlatformGetDevice(platform);
@@ -103,13 +66,14 @@ App *AppCreate()
     //
     // Offscreen pipeline
     //
-    app->offscreen_pipeline =
-        EngineCreateGraphicsPipeline(app->engine, "../shaders/color.hlsl", "standard");
+    app->offscreen_pipeline = EngineCreateGraphicsPipeline(app->engine, "../shaders/color.hlsl");
+	assert(app->offscreen_pipeline);
 
     //
     // Backbuffer pipeline
     //
-    app->backbuffer_pipeline = EngineCreateGraphicsPipeline2(app->engine, "../shaders/post.hlsl");
+    app->backbuffer_pipeline = EngineCreateGraphicsPipeline(app->engine, "../shaders/post.hlsl");
+	assert(app->backbuffer_pipeline);
 
     app->cmd_pool = rgCmdPoolCreate(device, RG_QUEUE_TYPE_GRAPHICS);
     app->cmd_buffers[0] = rgCmdBufferCreate(device, app->cmd_pool);
@@ -117,12 +81,11 @@ App *AppCreate()
 
     FPSCameraInit(&app->camera, app->engine);
 
-    app->uniform_arena = UniformArenaCreate(NULL, app->engine);
+	app->model_manager = ModelManagerCreate(NULL, app->engine, 256, 256);
     app->cube_mesh = MeshCreateUVSphere(NULL, app->engine, app->cmd_pool, 1.0f, 16);
     app->last_time = PlatformGetTime(platform);
 
-    app->model_asset =
-        ModelAssetFromMesh(NULL, app->engine, app->uniform_arena, app->cube_mesh);
+    app->model_asset = ModelAssetFromMesh(app->model_manager, app->cube_mesh);
 
     AppResize(app);
 
@@ -136,9 +99,7 @@ void AppDestroy(App *app)
 
     ModelAssetDestroy(app->model_asset);
     MeshDestroy(app->cube_mesh);
-    UniformArenaDestroy(app->uniform_arena);
-
-    rgDescriptorSetDestroy(device, app->camera_set);
+	ModelManagerDestroy(app->model_manager);
 
     rgPipelineDestroy(device, app->offscreen_pipeline);
     rgPipelineDestroy(device, app->backbuffer_pipeline);
@@ -208,30 +169,6 @@ void AppResize(App *app)
         .depth_stencil_attachment = app->offscreen_depth_image,
     };
     app->offscreen_pass = rgRenderPassCreate(device, &render_pass_info);
-
-    {
-        if (app->camera_set)
-        {
-            rgDescriptorSetDestroy(device, app->camera_set);
-            app->camera_set = NULL;
-        }
-
-        RgDescriptor uniform_descriptor = {.buffer = {UniformArenaGetBuffer(app->uniform_arena), 0, 0}};
-
-        RgDescriptorUpdateInfo entries[1] = {};
-        entries[0].binding = 0;
-        entries[0].descriptor_count = 1;
-        entries[0].base_index = 0;
-        entries[0].descriptors = &uniform_descriptor;
-
-        app->camera_set = rgDescriptorSetCreate(
-            device, EngineGetSetLayout(app->engine, "camera"));
-        rgDescriptorSetUpdate(
-            device,
-            app->camera_set,
-            entries, // entries
-            sizeof(entries) / sizeof(entries[0]));
-    }
 }
 
 void AppRenderFrame(App *app)
@@ -257,11 +194,9 @@ void AppRenderFrame(App *app)
     rgCmdSetRenderPass(cmd_buffer, offscreen_pass, 2, offscreen_clear_values);
 
     rgCmdBindPipeline(cmd_buffer, app->offscreen_pipeline);
-    uint32_t uniform_offset;
-    void *uniform_ptr =
-        UniformArenaUse(app->uniform_arena, &uniform_offset, sizeof(camera_uniform));
-    memcpy(uniform_ptr, &camera_uniform, sizeof(camera_uniform));
-    rgCmdBindDescriptorSet(cmd_buffer, 0, app->camera_set, 1, &uniform_offset);
+    rgCmdBindDescriptorSet(cmd_buffer, 0, EngineGetGlobalDescriptorSet(app->engine), 0, NULL);
+
+	ModelManagerBeginFrame(app->model_manager, &camera_uniform);
 
     Mat4 transform = Mat4Diagonal(1.0f);
     ModelAssetRender(app->model_asset, cmd_buffer, &transform);
@@ -295,10 +230,6 @@ void AppRenderFrame(App *app)
     rgSwapchainPresent(swapchain);
 
     app->current_frame = (app->current_frame + 1) % 2;
-    if (app->current_frame == 0)
-    {
-        UniformArenaReset(app->uniform_arena);
-    }
 }
 
 void AppRun(App *app)

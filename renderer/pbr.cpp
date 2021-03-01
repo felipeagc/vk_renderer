@@ -7,7 +7,7 @@
 #include "platform.h"
 #include "pipeline_util.h"
 
-extern "C" RgImage *GenerateBRDFLUT(Engine *engine, RgCmdPool *cmd_pool, uint32_t dim)
+extern "C" ImageHandle GenerateBRDFLUT(Engine *engine, RgCmdPool *cmd_pool, uint32_t dim)
 {
     Platform *platform = EngineGetPlatform(engine);
     RgDevice *device = PlatformGetDevice(platform);
@@ -20,17 +20,14 @@ extern "C" RgImage *GenerateBRDFLUT(Engine *engine, RgCmdPool *cmd_pool, uint32_
     info.sample_count = 1;
     info.mip_count = 1;
     info.layer_count = 1;
-    RgImage *image = rgImageCreate(device, &info);
+    ImageHandle image = EngineAllocateImageHandle(engine, &info);
 
     RgRenderPassInfo render_pass_info = {};
-    render_pass_info.color_attachments = &image;
+    render_pass_info.color_attachments = &image.image;
     render_pass_info.color_attachment_count = 1;
     RgRenderPass *render_pass = rgRenderPassCreate(device, &render_pass_info);
 
-    RgPipeline *pipeline = EngineCreateGraphicsPipeline(
-            engine,
-            "../shaders/brdf.hlsl",
-            "brdf");
+    RgPipeline *pipeline = EngineCreateGraphicsPipeline(engine, "../shaders/brdf.hlsl");
 
     RgCmdBuffer *cmd_buffer = rgCmdBufferCreate(device, cmd_pool);
 

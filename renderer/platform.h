@@ -13,7 +13,7 @@ typedef struct RgSwapchain RgSwapchain;
 typedef struct RgImage RgImage;
 typedef struct RgSampler RgSampler;
 
-enum EventType
+typedef enum EventType
 {
     EVENT_NONE,
     EVENT_WINDOW_MOVED,
@@ -43,9 +43,9 @@ enum EventType
     EVENT_WINDOW_MAXIMIZED,
     EVENT_WINDOW_UNMAXIMIZED,
     EVENT_WINDOW_SCALE_CHANGED,
-};
+} EventType;
 
-struct Event
+typedef struct Event
 {
     EventType type;
     union {
@@ -85,9 +85,9 @@ struct Event
             float y;
         } scale;
     };
-};
+} Event;
 
-enum KeyMod
+typedef enum KeyMod
 {
     KEY_MOD_SHIFT = 0X0001,
     KEY_MOD_CONTROL = 0X0002,
@@ -95,9 +95,9 @@ enum KeyMod
     KEY_MOD_SUPER = 0X0008,
     KEY_MOD_CAPSLOCK = 0X0010,
     KEY_MOD_NUMLOCK = 0X0020,
-};
+} KeyMod;
 
-enum Button
+typedef enum Button
 {
     BUTTON_LEFT = 0,
     BUTTON_RIGHT = 1,
@@ -107,9 +107,9 @@ enum Button
     BUTTON_BUTTON6 = 5,
     BUTTON_BUTTON7 = 6,
     BUTTON_BUTTON8 = 7,
-};
+} Button;
 
-enum Key
+typedef enum Key
 {
     KEY_SPACE        = 32,
     KEY_APOSTROPHE   = 39,
@@ -232,9 +232,9 @@ enum Key
     KEY_RIGHTALT     = 346,
     KEY_RIGHTSUPER   = 347,
     KEY_MENU         = 348,
-};
+} Key;
 
-struct Platform;
+typedef struct Platform Platform;
 
 Platform *PlatformCreate(Allocator *allocator, const char *title);
 void PlatformDestroy(Platform *platform);

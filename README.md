@@ -1,6 +1,7 @@
 # Vk renderer
 
-A new vulkan renderer, hopefully less buggy than my previous ones... written in (mostly) C-style C++.
+A new vulkan renderer, hopefully less buggy than my previous ones... 
+written in (mostly) C-style C++ and using descriptor indexing this time.
 
 The vulkan abstraction layer is in
 [rg.h](https://github.com/felipeagc/vk_renderer/blob/master/thirdparty/rg/rg.h)
