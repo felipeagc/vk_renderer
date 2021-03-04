@@ -1,7 +1,7 @@
 #pragma once
 
 #include <rg.h>
-#include "math.h"
+#include "math_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -10,14 +10,6 @@ extern "C" {
 typedef struct Engine Engine;
 typedef struct Mesh Mesh;
 typedef struct Allocator Allocator;
-
-typedef struct Vertex
-{
-    Vec3 pos;
-    Vec3 normal;
-    Vec4 tangent;
-    Vec2 uv;
-} Vertex;
 
 Mesh *MeshCreateCube(Allocator *allocator, Engine *engine, RgCmdPool *cmd_pool);
 Mesh *MeshCreateUVSphere(

@@ -267,6 +267,11 @@ extern "C" uint8_t *EngineLoadFileRelative(
     return data;
 }
 
+RgCmdPool *EngineGetTransferCmdPool(Engine *engine)
+{
+	return engine->transfer_cmd_pool;
+}
+
 extern "C" ImageHandle EngineGetWhiteImage(Engine *engine)
 {
     return engine->white_image;

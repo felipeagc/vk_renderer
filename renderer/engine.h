@@ -2,12 +2,14 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include "math_types.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 typedef struct Allocator Allocator;
+typedef struct RgCmdPool RgCmdPool;
 typedef struct RgBuffer RgBuffer;
 typedef struct RgImage RgImage;
 typedef struct RgSampler RgSampler;
@@ -20,6 +22,14 @@ typedef struct RgImageInfo RgImageInfo;
 typedef struct RgSamplerInfo RgSamplerInfo;
 typedef struct Platform Platform;
 typedef struct Engine Engine;
+
+typedef struct Vertex
+{
+    Vec3 pos;
+    Vec3 normal;
+    Vec4 tangent;
+    Vec2 uv;
+} Vertex;
 
 typedef struct ImageHandle
 {
@@ -49,6 +59,7 @@ const char *EngineGetExeDir(Engine *engine);
 uint8_t *
 EngineLoadFileRelative(Engine *engine, Allocator *allocator, const char *relative_path, size_t *size);
 
+RgCmdPool *EngineGetTransferCmdPool(Engine *engine);
 ImageHandle EngineGetWhiteImage(Engine *engine);
 ImageHandle EngineGetBlackImage(Engine *engine);
 SamplerHandle EngineGetDefaultSampler(Engine *engine);

@@ -31,6 +31,7 @@ struct App
     FPSCamera camera;
     ModelAsset *model_asset;
     Mesh *cube_mesh;
+    ModelAsset *gltf_asset;
 };
 
 App *AppCreate();
@@ -87,6 +88,12 @@ App *AppCreate()
 
     app->model_asset = ModelAssetFromMesh(app->model_manager, app->cube_mesh);
 
+    size_t gltf_data_size = 0;
+    uint8_t *gltf_data = EngineLoadFileRelative(app->engine, NULL, "../assets/helmet.glb", &gltf_data_size);
+    assert(gltf_data);
+    app->gltf_asset = ModelAssetFromGltf(app->model_manager, gltf_data, gltf_data_size);
+    Free(NULL, gltf_data);
+
     AppResize(app);
 
     return app;
@@ -97,6 +104,7 @@ void AppDestroy(App *app)
     Platform *platform = EngineGetPlatform(app->engine);
     RgDevice *device = PlatformGetDevice(platform);
 
+    ModelAssetDestroy(app->gltf_asset);
     ModelAssetDestroy(app->model_asset);
     MeshDestroy(app->cube_mesh);
 	ModelManagerDestroy(app->model_manager);
@@ -198,10 +206,23 @@ void AppRenderFrame(App *app)
 
 	ModelManagerBeginFrame(app->model_manager, &camera_uniform);
 
-    Mat4 transform = Mat4Diagonal(1.0f);
-    ModelAssetRender(app->model_asset, cmd_buffer, &transform);
-    Mat4Translate(&transform, V3(1.0, 1.0, 1.0));
-    ModelAssetRender(app->model_asset, cmd_buffer, &transform);
+    {
+        Mat4 transform = Mat4Diagonal(1.0f);
+        Mat4Translate(&transform, V3(-2.0, 0.0, 2.0));
+        ModelAssetRender(app->model_asset, cmd_buffer, &transform);
+    }
+
+    {
+        Mat4 transform = Mat4Diagonal(1.0f);
+        Mat4Translate(&transform, V3(0.0, 0.0, 2.0));
+        ModelAssetRender(app->model_asset, cmd_buffer, &transform);
+    }
+
+    {
+        Mat4 transform = Mat4Diagonal(1.0f);
+        Mat4Translate(&transform, V3(2.0, 0.0, 2.0));
+        ModelAssetRender(app->gltf_asset, cmd_buffer, &transform);
+    }
 
     // Backbuffer pass
 

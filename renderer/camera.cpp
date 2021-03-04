@@ -1,5 +1,6 @@
 #include "camera.h"
 
+#include "math.h"
 #include "platform.h"
 #include "engine.h"
 

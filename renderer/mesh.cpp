@@ -1,5 +1,6 @@
 #include "mesh.h"
 
+#include "math.h"
 #include "allocator.h"
 #include "platform.h"
 #include "engine.h"

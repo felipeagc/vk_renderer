@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stdalign.h>
-#include "math.h"
+#include "math_types.h"
 
 #ifdef __cplusplus
 extern "C" {

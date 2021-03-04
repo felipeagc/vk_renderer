@@ -40,6 +40,12 @@ struct Array
         }
     }
 
+	void resize(size_t wanted_size)
+	{
+		this->ensure(wanted_size);
+		this->length = wanted_size;
+	}
+
     void push_back(const T &value)
     {
         this->ensure(this->length + 1);
