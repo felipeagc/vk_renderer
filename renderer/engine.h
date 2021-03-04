@@ -1,7 +1,6 @@
 #pragma once
 
-#include <stdint.h>
-#include <stddef.h>
+#include "base.h"
 #include "math_types.h"
 
 #ifdef __cplusplus

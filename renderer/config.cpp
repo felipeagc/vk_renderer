@@ -1,6 +1,5 @@
 #include "config.h"
 
-#include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include "lexer.h"
@@ -248,7 +247,7 @@ ConfigValue *ConfigValueObjectGetField(ConfigValue *value, const char *name)
     ConfigValue *field_value = nullptr;
     if (!value->object.get(name, &field_value)) return nullptr;
     
-    assert(field_value);
+    EG_ASSERT(field_value);
     return field_value;
 }
 

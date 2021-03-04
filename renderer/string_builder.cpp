@@ -1,6 +1,5 @@
 #include "string_builder.h"
 
-#include <assert.h>
 #include <string.h>
 #include "array.hpp"
 #include "allocator.h"

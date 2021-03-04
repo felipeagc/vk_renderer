@@ -3,7 +3,6 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <assert.h>
 #include <tinyshader/tinyshader.h>
 #include <rg.h>
 #include <spirv.h>
@@ -328,7 +327,7 @@ static void AnalyzeSpirv(
 {
     memset(module, 0, sizeof(*module));
 
-    assert(code[0] == SpvMagicNumber);
+    EG_ASSERT(code[0] == SpvMagicNumber);
 
     module->stage = stage;
 
@@ -345,7 +344,7 @@ static void AnalyzeSpirv(
         switch (opcode)
         {
         case SpvOpDecorate: {
-            assert(word_count >= 3);
+            EG_ASSERT(word_count >= 3);
             uint32_t id = inst[1];
             uint32_t deckind = inst[2];
             uint32_t decvalue = inst[3];
@@ -363,12 +362,12 @@ static void AnalyzeSpirv(
         }
 
         case SpvOpVariable: {
-            assert(word_count >= 3);
+            EG_ASSERT(word_count >= 3);
 
             uint32_t id = inst[2];
-            assert(id < id_bound);
+            EG_ASSERT(id < id_bound);
 
-            assert(ids[id].opcode == 0);
+            EG_ASSERT(ids[id].opcode == 0);
 
             ids[id].opcode = opcode;
             ids[id].subtype_id = inst[1];
@@ -383,47 +382,47 @@ static void AnalyzeSpirv(
         case SpvOpTypeImage:
         case SpvOpTypeSampler:
         case SpvOpTypeSampledImage: {
-            assert(word_count >= 2);
+            EG_ASSERT(word_count >= 2);
 
             uint32_t id = inst[1];
-            assert(id < id_bound);
+            EG_ASSERT(id < id_bound);
 
-            assert(ids[id].opcode == 0);
+            EG_ASSERT(ids[id].opcode == 0);
             ids[id].opcode = opcode;
 
             if (opcode == SpvOpTypeVector)
             {
-                assert(word_count >= 4);
+                EG_ASSERT(word_count >= 4);
                 ids[id].subtype_id = inst[2];
                 ids[id].vector_width = inst[3];
-                assert(ids[id].vector_width > 0);
+                EG_ASSERT(ids[id].vector_width > 0);
             }
 
             if (opcode == SpvOpTypeFloat)
             {
-                assert(word_count >= 3);
+                EG_ASSERT(word_count >= 3);
                 ids[id].type_size = inst[2];
-                assert(ids[id].type_size > 0);
+                EG_ASSERT(ids[id].type_size > 0);
             }
 
             if (opcode == SpvOpTypeInt)
             {
-                assert(word_count >= 3);
+                EG_ASSERT(word_count >= 3);
                 ids[id].type_size = inst[2];
                 ids[id].is_signed = inst[3] == 1;
-                assert(ids[id].type_size > 0);
+                EG_ASSERT(ids[id].type_size > 0);
             }
 
             break;
         }
 
         case SpvOpTypePointer: {
-            assert(word_count == 4);
+            EG_ASSERT(word_count == 4);
 
             uint32_t id = inst[1];
-            assert(id < id_bound);
+            EG_ASSERT(id < id_bound);
 
-            assert(ids[id].opcode == 0);
+            EG_ASSERT(ids[id].opcode == 0);
             ids[id].opcode = opcode;
             ids[id].subtype_id = inst[3];
             ids[id].storage_class = inst[2];
@@ -431,7 +430,7 @@ static void AnalyzeSpirv(
         }
         }
 
-        assert(inst + word_count <= code + code_size);
+        EG_ASSERT(inst + word_count <= code + code_size);
 
         inst += word_count;
     }
@@ -441,7 +440,7 @@ static void AnalyzeSpirv(
         switch (id->opcode)
         {
         case SpvOpVariable: {
-            assert(ids[id->subtype_id].opcode == SpvOpTypePointer);
+            EG_ASSERT(ids[id->subtype_id].opcode == SpvOpTypePointer);
 
             Id *pointer_type = &ids[id->subtype_id];
             Id *pointed_type = &ids[pointer_type->subtype_id];
@@ -468,12 +467,12 @@ static void AnalyzeSpirv(
                             case 2: attrib->format = RG_FORMAT_RG32_SFLOAT; break;
                             case 3: attrib->format = RG_FORMAT_RGB32_SFLOAT; break;
                             case 4: attrib->format = RG_FORMAT_RGBA32_SFLOAT; break;
-                            default: assert(0); break;
+                            default: EG_ASSERT(0); break;
                             }
                         }
                         else
                         {
-                            assert(0);
+                            EG_ASSERT(0);
                         }
 
                         module->vertex_stride += (vector_width * (elem_type->type_size / 8));
@@ -486,14 +485,14 @@ static void AnalyzeSpirv(
                         }
                         else
                         {
-                            assert(0);
+                            EG_ASSERT(0);
                         }
 
                         module->vertex_stride += (pointed_type->type_size / 8);
                     }
                     else
                     {
-                        assert(0);
+                        EG_ASSERT(0);
                     }
                 }
 
@@ -521,7 +520,7 @@ static void AnalyzeSpirv(
         case RG_FORMAT_RGBA32_SFLOAT: offset += 4 * 4; break;
 
         case RG_FORMAT_R32_UINT: offset += 4; break;
-        default: assert(0); break;
+        default: EG_ASSERT(0); break;
         }
     }
 

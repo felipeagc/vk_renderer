@@ -3,7 +3,6 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <assert.h>
 #include <rg.h>
 #include "allocator.h"
 #include "platform.h"
@@ -258,7 +257,8 @@ extern "C" uint8_t *EngineLoadFileRelative(
     fseek(f, 0, SEEK_SET);
 
     uint8_t *data = (uint8_t*)Allocate(allocator, *size);
-    assert(fread(data, 1, *size, f) == *size);
+    size_t read_size = fread(data, 1, *size, f);
+    EG_ASSERT(read_size == *size);
 
     fclose(f);
 
@@ -295,16 +295,16 @@ extern "C" SamplerHandle EngineGetDefaultSampler(Engine *engine)
 extern "C" RgPipeline *EngineCreateGraphicsPipeline(Engine *engine, const char *path)
 {
     RgPipelineLayout *pipeline_layout = engine->global_pipeline_layout;
-    assert(pipeline_layout);
+    EG_ASSERT(pipeline_layout);
 
     size_t hlsl_size = 0;
     char *hlsl = (char*)
         EngineLoadFileRelative(engine, engine->allocator, path, &hlsl_size);
-    assert(hlsl);
+    EG_ASSERT(hlsl);
 
     RgPipeline *pipeline =
         PipelineUtilCreateGraphicsPipeline(engine, engine->allocator, pipeline_layout, hlsl, hlsl_size);
-    assert(pipeline);
+    EG_ASSERT(pipeline);
 
     Free(engine->allocator, hlsl);
 
@@ -317,11 +317,11 @@ extern "C" RgPipeline *EngineCreateComputePipeline(Engine *engine, const char *p
     RgDevice *device = PlatformGetDevice(platform);
 
     RgPipelineLayout *pipeline_layout = engine->global_pipeline_layout;
-    assert(pipeline_layout);
+    EG_ASSERT(pipeline_layout);
 
     size_t hlsl_size = 0;
     char *hlsl = (char*) EngineLoadFileRelative(engine, engine->allocator, path, &hlsl_size);
-    assert(hlsl);
+    EG_ASSERT(hlsl);
 
     uint8_t *spv_code = NULL;
     size_t spv_code_size = 0;
@@ -360,7 +360,7 @@ extern "C" RgPipeline *EngineCreateComputePipeline(Engine *engine, const char *p
     info.code = spv_code;
     info.code_size = spv_code_size;
     RgPipeline *pipeline = rgComputePipelineCreate(device, &info);
-    assert(pipeline);
+    EG_ASSERT(pipeline);
 
     Free(engine->allocator, spv_code);
     Free(engine->allocator, hlsl);
@@ -384,7 +384,7 @@ static uint32_t EngineAllocateDescriptor(
     uint32_t binding,
     const RgDescriptor *descriptor)
 {
-    assert(engine->global_descriptor_set);
+    EG_ASSERT(engine->global_descriptor_set);
 
     uint32_t handle = PoolAllocateSlot(pool);
     if (handle == UINT32_MAX) return handle;
@@ -428,7 +428,7 @@ extern "C" BufferHandle EngineAllocateStorageBufferHandle(Engine *engine, RgBuff
         0,
         &descriptor);
 
-	assert(handle.index != UINT32_MAX);
+	EG_ASSERT(handle.index != UINT32_MAX);
 
 	return handle;
 }
@@ -458,7 +458,7 @@ extern "C" ImageHandle EngineAllocateImageHandle(Engine *engine, RgImageInfo *in
         1,
         &descriptor);
 
-	assert(handle.index != UINT32_MAX);
+	EG_ASSERT(handle.index != UINT32_MAX);
 
 	return handle;
 }
@@ -488,7 +488,7 @@ extern "C" SamplerHandle EngineAllocateSamplerHandle(Engine *engine, RgSamplerIn
         2,
         &descriptor);
 
-	assert(handle.index != UINT32_MAX);
+	EG_ASSERT(handle.index != UINT32_MAX);
 
 	return handle;
 }

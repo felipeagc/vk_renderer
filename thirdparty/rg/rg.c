@@ -977,8 +977,8 @@ static inline RgMemoryChunk *rgMemoryChunkSplit(
 {
     assert(chunk);
 
-    ptrdiff_t index = (ptrdiff_t)(chunk - block->chunks);
-    assert(index >= 0);
+    // Assert that the chunk index is valid
+    assert((ptrdiff_t)(chunk - block->chunks) >= 0);
 
     const size_t chunk_size = rgMemoryChunkSize(block, chunk);
     const size_t chunk_offset = rgMemoryChunkOffset(block, chunk);

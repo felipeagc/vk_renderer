@@ -1,8 +1,8 @@
 #pragma once
 
-#include <assert.h>
 #include <math.h>
 #include <string.h>
+#include "base.h"
 #include "math_types.h"
 
 #define PI 3.14159265358979323846f
@@ -783,7 +783,7 @@ Quat QuatLookAt(Vec3 direction, Vec3 up)
             result.w = (m[0][1] - m[1][0]) * mult;
             break;
         default:
-            assert(0);
+            EG_ASSERT(0);
             break;
     }
 

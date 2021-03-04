@@ -1,6 +1,5 @@
 #include "pbr.h"
 
-#include <assert.h>
 #include <rg.h>
 #include "allocator.h"
 #include "engine.h"

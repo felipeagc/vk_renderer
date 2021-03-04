@@ -5,7 +5,6 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
-#include <assert.h>
 #include "allocator.h"
 
 #ifdef _WIN32
@@ -242,7 +241,7 @@ static Event* eventQueueNewEvent(void)
 {
     Event* event = event_queue.events + event_queue.head;
     event_queue.head = (event_queue.head + 1) % EVENT_CAPACITY;
-    assert(event_queue.head != event_queue.tail);
+    EG_ASSERT(event_queue.head != event_queue.tail);
     memset(event, 0, sizeof(Event));
     return event;
 }

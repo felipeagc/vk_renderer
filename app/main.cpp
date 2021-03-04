@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <assert.h>
 #include <renderer/platform.h>
 #include <renderer/engine.h>
 #include <renderer/camera.h>
@@ -11,7 +10,7 @@
 struct App
 {
     Engine *engine;
-	ImageHandle offscreen_image;
+    ImageHandle offscreen_image;
     RgImage *offscreen_depth_image;
     RgRenderPass *offscreen_pass;
 
@@ -22,12 +21,12 @@ struct App
     double last_time;
     double delta_time;
 
-	SamplerHandle sampler;
+    SamplerHandle sampler;
 
     RgPipeline *offscreen_pipeline;
     RgPipeline *backbuffer_pipeline;
 
-	ModelManager *model_manager;
+    ModelManager *model_manager;
     FPSCamera camera;
     ModelAsset *model_asset;
     Mesh *cube_mesh;
@@ -67,14 +66,16 @@ App *AppCreate()
     //
     // Offscreen pipeline
     //
-    app->offscreen_pipeline = EngineCreateGraphicsPipeline(app->engine, "../shaders/color.hlsl");
-	assert(app->offscreen_pipeline);
+    app->offscreen_pipeline =
+        EngineCreateGraphicsPipeline(app->engine, "../shaders/color.hlsl");
+    EG_ASSERT(app->offscreen_pipeline);
 
     //
     // Backbuffer pipeline
     //
-    app->backbuffer_pipeline = EngineCreateGraphicsPipeline(app->engine, "../shaders/post.hlsl");
-	assert(app->backbuffer_pipeline);
+    app->backbuffer_pipeline =
+        EngineCreateGraphicsPipeline(app->engine, "../shaders/post.hlsl");
+    EG_ASSERT(app->backbuffer_pipeline);
 
     app->cmd_pool = rgCmdPoolCreate(device, RG_QUEUE_TYPE_GRAPHICS);
     app->cmd_buffers[0] = rgCmdBufferCreate(device, app->cmd_pool);
@@ -82,15 +83,16 @@ App *AppCreate()
 
     FPSCameraInit(&app->camera, app->engine);
 
-	app->model_manager = ModelManagerCreate(NULL, app->engine, 256, 256);
+    app->model_manager = ModelManagerCreate(NULL, app->engine, 256, 256);
     app->cube_mesh = MeshCreateUVSphere(NULL, app->engine, app->cmd_pool, 1.0f, 16);
     app->last_time = PlatformGetTime(platform);
 
     app->model_asset = ModelAssetFromMesh(app->model_manager, app->cube_mesh);
 
     size_t gltf_data_size = 0;
-    uint8_t *gltf_data = EngineLoadFileRelative(app->engine, NULL, "../assets/helmet.glb", &gltf_data_size);
-    assert(gltf_data);
+    uint8_t *gltf_data = EngineLoadFileRelative(
+        app->engine, NULL, "../assets/helmet.glb", &gltf_data_size);
+    EG_ASSERT(gltf_data);
     app->gltf_asset = ModelAssetFromGltf(app->model_manager, gltf_data, gltf_data_size);
     Free(NULL, gltf_data);
 
@@ -107,14 +109,14 @@ void AppDestroy(App *app)
     ModelAssetDestroy(app->gltf_asset);
     ModelAssetDestroy(app->model_asset);
     MeshDestroy(app->cube_mesh);
-	ModelManagerDestroy(app->model_manager);
+    ModelManagerDestroy(app->model_manager);
 
     rgPipelineDestroy(device, app->offscreen_pipeline);
     rgPipelineDestroy(device, app->backbuffer_pipeline);
 
-	EngineFreeSamplerHandle(app->engine, &app->sampler);
+    EngineFreeSamplerHandle(app->engine, &app->sampler);
 
-	EngineFreeImageHandle(app->engine, &app->offscreen_image);
+    EngineFreeImageHandle(app->engine, &app->offscreen_image);
     rgImageDestroy(device, app->offscreen_depth_image);
     rgRenderPassDestroy(device, app->offscreen_pass);
 
@@ -141,7 +143,7 @@ void AppResize(App *app)
     }
     if (app->offscreen_image.image)
     {
-		EngineFreeImageHandle(app->engine, &app->offscreen_image);
+        EngineFreeImageHandle(app->engine, &app->offscreen_image);
     }
     if (app->offscreen_depth_image)
     {
@@ -149,7 +151,7 @@ void AppResize(App *app)
     }
 
     RgImageInfo offscreen_image_info = {
-        .extent = { width, height, 1 },
+        .extent = {width, height, 1},
         .format = RG_FORMAT_RGBA8_UNORM,
         .usage = RG_IMAGE_USAGE_SAMPLED | RG_IMAGE_USAGE_COLOR_ATTACHMENT,
         .aspect = RG_IMAGE_ASPECT_COLOR,
@@ -160,7 +162,7 @@ void AppResize(App *app)
     app->offscreen_image = EngineAllocateImageHandle(app->engine, &offscreen_image_info);
 
     RgImageInfo offscreen_depth_image_info = {
-        .extent = { width, height, 1 },
+        .extent = {width, height, 1},
         .format = RG_FORMAT_D32_SFLOAT_S8_UINT,
         .usage = RG_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT,
         .aspect = RG_IMAGE_ASPECT_DEPTH | RG_IMAGE_ASPECT_STENCIL,
@@ -197,14 +199,15 @@ void AppRenderFrame(App *app)
     // Offscreen pass
 
     RgClearValue offscreen_clear_values[2];
-    offscreen_clear_values[0].color = { { 0.0, 0.0, 0.0, 1.0 } };
-    offscreen_clear_values[1].depth_stencil = { 0.0f, 0 };
+    offscreen_clear_values[0].color = {{0.0, 0.0, 0.0, 1.0}};
+    offscreen_clear_values[1].depth_stencil = {0.0f, 0};
     rgCmdSetRenderPass(cmd_buffer, offscreen_pass, 2, offscreen_clear_values);
 
     rgCmdBindPipeline(cmd_buffer, app->offscreen_pipeline);
-    rgCmdBindDescriptorSet(cmd_buffer, 0, EngineGetGlobalDescriptorSet(app->engine), 0, NULL);
+    rgCmdBindDescriptorSet(
+        cmd_buffer, 0, EngineGetGlobalDescriptorSet(app->engine), 0, NULL);
 
-	ModelManagerBeginFrame(app->model_manager, &camera_uniform);
+    ModelManagerBeginFrame(app->model_manager, &camera_uniform);
 
     {
         Mat4 transform = Mat4Diagonal(1.0f);
@@ -227,11 +230,12 @@ void AppRenderFrame(App *app)
     // Backbuffer pass
 
     RgClearValue backbuffer_clear_values[1];
-    backbuffer_clear_values[0].color = { { 0.0, 0.0, 0.0, 1.0 } };
+    backbuffer_clear_values[0].color = {{0.0, 0.0, 0.0, 1.0}};
     rgCmdSetRenderPass(cmd_buffer, backbuffer_pass, 1, backbuffer_clear_values);
 
     rgCmdBindPipeline(cmd_buffer, app->backbuffer_pipeline);
-    rgCmdBindDescriptorSet(cmd_buffer, 0, EngineGetGlobalDescriptorSet(app->engine), 0, NULL);
+    rgCmdBindDescriptorSet(
+        cmd_buffer, 0, EngineGetGlobalDescriptorSet(app->engine), 0, NULL);
 
     struct
     {
@@ -272,18 +276,15 @@ void AppRun(App *app)
         {
             switch (event.type)
             {
-            case EVENT_WINDOW_RESIZED:
-            {
+            case EVENT_WINDOW_RESIZED: {
                 AppResize(app);
                 break;
             }
-            case EVENT_KEY_PRESSED:
-            {
+            case EVENT_KEY_PRESSED: {
                 if (event.keyboard.key == KEY_ESCAPE)
                 {
                     PlatformSetCursorEnabled(
-                            platform,
-                            !PlatformGetCursorEnabled(platform));
+                        platform, !PlatformGetCursorEnabled(platform));
                 }
                 break;
             }

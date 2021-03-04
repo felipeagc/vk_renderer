@@ -1,6 +1,5 @@
 #include "buffer_pool.h"
 
-#include <assert.h>
 #include <string.h>
 #include "rg.h"
 #include "allocator.h"
@@ -75,7 +74,7 @@ void BufferPoolReset(BufferPool *pool)
 
 uint32_t BufferPoolAllocateItem(BufferPool *pool, size_t size, void *data)
 {
-	assert(size == pool->item_size);
+	EG_ASSERT(size == pool->item_size);
 	size_t item_index = pool->allocated_items++;
 
 	uint8_t *dest = pool->mapping + (item_index * pool->item_size);
