@@ -6,8 +6,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_library(
   renderer
 
-  renderer/platform.h
-  renderer/platform.cpp
+  # renderer/platform.h
+  # renderer/platform.cpp
   renderer/array.hpp
   renderer/math.h
   renderer/allocator.h

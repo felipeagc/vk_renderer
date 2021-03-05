@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <renderer/platform.h>
 #include <renderer/engine.h>
 #include <renderer/camera.h>
 #include <renderer/math.h>
@@ -45,8 +44,7 @@ App *AppCreate()
 
     app->engine = EngineCreate(NULL);
 
-    Platform *platform = EngineGetPlatform(app->engine);
-    RgDevice *device = PlatformGetDevice(platform);
+    RgDevice *device = EngineGetDevice(app->engine);
 
     //
     // Create sampler
@@ -85,7 +83,7 @@ App *AppCreate()
 
     app->model_manager = ModelManagerCreate(NULL, app->engine, 256, 256);
     app->cube_mesh = MeshCreateUVSphere(NULL, app->engine, app->cmd_pool, 1.0f, 16);
-    app->last_time = PlatformGetTime(platform);
+    app->last_time = EngineGetTime(app->engine);
 
     app->model_asset = ModelAssetFromMesh(app->model_manager, app->cube_mesh);
 
@@ -103,8 +101,7 @@ App *AppCreate()
 
 void AppDestroy(App *app)
 {
-    Platform *platform = EngineGetPlatform(app->engine);
-    RgDevice *device = PlatformGetDevice(platform);
+    RgDevice *device = EngineGetDevice(app->engine);
 
     ModelAssetDestroy(app->gltf_asset);
     ModelAssetDestroy(app->model_asset);
@@ -131,11 +128,10 @@ void AppDestroy(App *app)
 
 void AppResize(App *app)
 {
-    Platform *platform = EngineGetPlatform(app->engine);
-    RgDevice *device = PlatformGetDevice(platform);
+    RgDevice *device = EngineGetDevice(app->engine);
 
     uint32_t width, height;
-    PlatformGetWindowSize(platform, &width, &height);
+    EngineGetWindowSize(app->engine, &width, &height);
 
     if (app->offscreen_pass)
     {
@@ -183,11 +179,9 @@ void AppResize(App *app)
 
 void AppRenderFrame(App *app)
 {
-    Platform *platform = EngineGetPlatform(app->engine);
-
     CameraUniform camera_uniform = FPSCameraUpdate(&app->camera, (float)app->delta_time);
 
-    RgSwapchain *swapchain = PlatformGetSwapchain(platform);
+    RgSwapchain *swapchain = EngineGetSwapchain(app->engine);
     RgCmdBuffer *cmd_buffer = app->cmd_buffers[app->current_frame];
     RgRenderPass *offscreen_pass = app->offscreen_pass;
     RgRenderPass *backbuffer_pass = rgSwapchainGetRenderPass(swapchain);
@@ -261,18 +255,16 @@ void AppRenderFrame(App *app)
 
 void AppRun(App *app)
 {
-    Platform *platform = EngineGetPlatform(app->engine);
-
-    while (!PlatformShouldClose(platform))
+    while (!EngineShouldClose(app->engine))
     {
-        PlatformPollEvents(platform);
+        EnginePollEvents(app->engine);
 
-        double now = PlatformGetTime(platform);
+        double now = EngineGetTime(app->engine);
         app->delta_time = now - app->last_time;
         app->last_time = now;
 
         Event event = {};
-        while (PlatformNextEvent(platform, &event))
+        while (EngineNextEvent(app->engine, &event))
         {
             switch (event.type)
             {
@@ -283,8 +275,8 @@ void AppRun(App *app)
             case EVENT_KEY_PRESSED: {
                 if (event.keyboard.key == KEY_ESCAPE)
                 {
-                    PlatformSetCursorEnabled(
-                        platform, !PlatformGetCursorEnabled(platform));
+                    EngineSetCursorEnabled(
+                        app->engine, !EngineGetCursorEnabled(app->engine));
                 }
                 break;
             }

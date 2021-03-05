@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <rg.h>
 #include "allocator.h"
-#include "platform.h"
 #include "lexer.h"
 #include "string_map.hpp"
 #include "config.h"
@@ -15,18 +14,55 @@
 #include <tinyshader/tinyshader.h>
 
 #if defined(_MSC_VER)
-#pragma warning(disable:4996)
+#pragma warning(disable : 4996)
 #endif
 
 #ifdef __linux__
+#define GLFW_EXPOSE_NATIVE_X11
 #include <unistd.h>
 #include <linux/limits.h>
 #endif
 
 #if defined(_WIN32)
+#define GLFW_EXPOSE_NATIVE_WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #endif
+
+#include <GLFW/glfw3.h>
+#include <GLFW/glfw3native.h>
+
+#define EVENT_CAPACITY 1024
+
+static struct
+{
+    Event events[EVENT_CAPACITY];
+    size_t head;
+    size_t tail;
+} event_queue = {{}, 0, 0};
+
+static void eventQueueWindowPosCallback(GLFWwindow *window, int x, int y);
+static void eventQueueWindowSizeCallback(GLFWwindow *window, int width, int height);
+static void eventQueueWindowCloseCallback(GLFWwindow *window);
+static void eventQueueWindowRefreshCallback(GLFWwindow *window);
+static void eventQueueWindowFocusCallback(GLFWwindow *window, int focused);
+static void eventQueueWindowIconifyCallback(GLFWwindow *window, int iconified);
+static void eventQueueFramebufferSizeCallback(GLFWwindow *window, int width, int height);
+static void
+eventQueueMouseButtonCallback(GLFWwindow *window, int button, int action, int mods);
+static void eventQueueCursorPosCallback(GLFWwindow *window, double x, double y);
+static void eventQueueCursorEnterCallback(GLFWwindow *window, int entered);
+static void eventQueueScrollCallback(GLFWwindow *window, double x, double y);
+static void
+eventQueueKeyCallback(GLFWwindow *window, int key, int scancode, int action, int mods);
+static void eventQueueCharCallback(GLFWwindow *window, unsigned int codepoint);
+static void eventQueueMonitorCallback(GLFWmonitor *monitor, int action);
+static void eventQueueFileDropCallback(GLFWwindow *window, int count, const char **paths);
+static void eventQueueJoystickCallback(int jid, int action);
+static void eventQueueWindowMaximizeCallback(GLFWwindow *window, int maximized);
+static void
+eventQueueWindowContentScaleCallback(GLFWwindow *window, float xscale, float yscale);
+static void eventFree(Event *event);
 
 static const char *getExeDirPath(Allocator *allocator)
 {
@@ -34,7 +70,7 @@ static const char *getExeDirPath(Allocator *allocator)
     char buf[PATH_MAX];
     size_t buf_size = readlink("/proc/self/exe", buf, sizeof(buf));
 
-    char *path = (char*)Allocate(allocator, buf_size+1);
+    char *path = (char *)Allocate(allocator, buf_size + 1);
     memcpy(path, buf, buf_size);
     path[buf_size] = '\0';
 
@@ -53,8 +89,8 @@ static const char *getExeDirPath(Allocator *allocator)
 #elif defined(_WIN32)
     char tmp_buf[MAX_PATH];
     DWORD buf_size = GetModuleFileNameA(NULL, tmp_buf, sizeof(tmp_buf));
-    char *path = (char*)Allocate(allocator, buf_size+1);
-    GetModuleFileNameA(GetModuleHandle(NULL), path, buf_size+1);
+    char *path = (char *)Allocate(allocator, buf_size + 1);
+    GetModuleFileNameA(GetModuleHandle(NULL), path, buf_size + 1);
 
     size_t last_slash_pos = 0;
     for (size_t i = 0; i < buf_size; ++i)
@@ -69,7 +105,7 @@ static const char *getExeDirPath(Allocator *allocator)
 
     return path;
 #else
-    #error unsupported system
+#error unsupported system
 #endif
 }
 
@@ -77,7 +113,10 @@ struct Engine
 {
     Allocator *allocator;
     Arena *arena;
-    Platform *platform;
+
+    GLFWwindow *window;
+    RgDevice *device;
+    RgSwapchain *swapchain;
 
     const char *exe_dir;
 
@@ -98,18 +137,78 @@ struct Engine
     Pool *sampler_pool;
 };
 
+static void EngineResizeResources(Engine *engine)
+{
+    int width, height;
+    glfwGetFramebufferSize(engine->window, &width, &height);
+
+    RgSwapchain *old_swapchain = engine->swapchain;
+
+    RgSwapchainInfo swapchain_info = {};
+    swapchain_info.vsync = false;
+    swapchain_info.old_swapchain = old_swapchain;
+
+    swapchain_info.width = width;
+    swapchain_info.height = height;
+
+#ifdef _WIN32
+    swapchain_info.window_handle = (void *)glfwGetWin32Window(engine->window),
+#else
+    swapchain_info.window_handle = (void *)glfwGetX11Window(engine->window),
+    swapchain_info.display_handle = (void *)glfwGetX11Display(),
+#endif
+
+    engine->swapchain = rgSwapchainCreate(engine->device, &swapchain_info);
+
+    if (old_swapchain)
+    {
+        rgSwapchainDestroy(engine->device, old_swapchain);
+    }
+}
+
 extern "C" Engine *EngineCreate(Allocator *allocator)
 {
-    Engine *engine = (Engine*)Allocate(allocator, sizeof(Engine));
+    Engine *engine = (Engine *)Allocate(allocator, sizeof(Engine));
     *engine = {};
 
     engine->allocator = allocator;
-    engine->platform = PlatformCreate(allocator, "App");
     engine->arena = ArenaCreate(engine->allocator, 4194304); // 4MiB
 
     engine->exe_dir = getExeDirPath(allocator);
 
-    RgDevice *device = PlatformGetDevice(engine->platform);
+    glfwInit();
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    GLFWwindow *window = glfwCreateWindow(800, 600, "Vulkan renderer", NULL, NULL);
+    glfwSetWindowUserPointer(window, engine);
+
+    glfwSetMonitorCallback(eventQueueMonitorCallback);
+    glfwSetJoystickCallback(eventQueueJoystickCallback);
+    glfwSetWindowPosCallback(window, eventQueueWindowPosCallback);
+    glfwSetWindowSizeCallback(window, eventQueueWindowSizeCallback);
+    glfwSetWindowCloseCallback(window, eventQueueWindowCloseCallback);
+    glfwSetWindowRefreshCallback(window, eventQueueWindowRefreshCallback);
+    glfwSetWindowFocusCallback(window, eventQueueWindowFocusCallback);
+    glfwSetWindowIconifyCallback(window, eventQueueWindowIconifyCallback);
+    glfwSetFramebufferSizeCallback(window, eventQueueFramebufferSizeCallback);
+    glfwSetMouseButtonCallback(window, eventQueueMouseButtonCallback);
+    glfwSetCursorPosCallback(window, eventQueueCursorPosCallback);
+    glfwSetCursorEnterCallback(window, eventQueueCursorEnterCallback);
+    glfwSetScrollCallback(window, eventQueueScrollCallback);
+    glfwSetKeyCallback(window, eventQueueKeyCallback);
+    glfwSetCharCallback(window, eventQueueCharCallback);
+    glfwSetDropCallback(window, eventQueueFileDropCallback);
+    glfwSetWindowMaximizeCallback(window, eventQueueWindowMaximizeCallback);
+    glfwSetWindowContentScaleCallback(window, eventQueueWindowContentScaleCallback);
+
+    engine->window = window;
+
+    RgDeviceInfo device_info = {};
+    device_info.enable_validation = true;
+    engine->device = rgDeviceCreate(&device_info);
+
+    EngineResizeResources(engine);
+
+    RgDevice *device = engine->device;
 
     engine->storage_buffer_pool = PoolCreate(engine->allocator, 4 * 1024);
     engine->texture_pool = PoolCreate(engine->allocator, 4 * 1024);
@@ -118,21 +217,21 @@ extern "C" Engine *EngineCreate(Allocator *allocator)
     {
         RgDescriptorSetLayoutEntry entries[] = {
             {
-                0, // binding
-                RG_DESCRIPTOR_STORAGE_BUFFER, // type
-                RG_SHADER_STAGE_ALL, // shader_stages
+                0,                                             // binding
+                RG_DESCRIPTOR_STORAGE_BUFFER,                  // type
+                RG_SHADER_STAGE_ALL,                           // shader_stages
                 PoolGetSlotCount(engine->storage_buffer_pool), // count
             },
             {
-                1, // binding
-                RG_DESCRIPTOR_IMAGE, // type
-                RG_SHADER_STAGE_ALL, // shader_stages
+                1,                                      // binding
+                RG_DESCRIPTOR_IMAGE,                    // type
+                RG_SHADER_STAGE_ALL,                    // shader_stages
                 PoolGetSlotCount(engine->texture_pool), // count
             },
             {
-                2, // binding
-                RG_DESCRIPTOR_SAMPLER, // type
-                RG_SHADER_STAGE_ALL, // shader_stages
+                2,                                      // binding
+                RG_DESCRIPTOR_SAMPLER,                  // type
+                RG_SHADER_STAGE_ALL,                    // shader_stages
                 PoolGetSlotCount(engine->sampler_pool), // count
             },
         };
@@ -146,9 +245,11 @@ extern "C" Engine *EngineCreate(Allocator *allocator)
         RgPipelineLayoutInfo pipeline_layout_info = {};
         pipeline_layout_info.set_layouts = &engine->global_set_layout;
         pipeline_layout_info.set_layout_count = 1;
-        engine->global_pipeline_layout = rgPipelineLayoutCreate(device, &pipeline_layout_info);
+        engine->global_pipeline_layout =
+            rgPipelineLayoutCreate(device, &pipeline_layout_info);
 
-        engine->global_descriptor_set = rgDescriptorSetCreate(device, engine->global_set_layout);
+        engine->global_descriptor_set =
+            rgDescriptorSetCreate(device, engine->global_set_layout);
     }
 
     engine->transfer_cmd_pool = rgCmdPoolCreate(device, RG_QUEUE_TYPE_TRANSFER);
@@ -174,21 +275,21 @@ extern "C" Engine *EngineCreate(Allocator *allocator)
 
     image_copy.image = engine->white_image.image;
     rgImageUpload(
-            device,
-            engine->transfer_cmd_pool,
-            &image_copy,
-            &extent,
-            sizeof(white_data),
-            white_data);
+        device,
+        engine->transfer_cmd_pool,
+        &image_copy,
+        &extent,
+        sizeof(white_data),
+        white_data);
 
     image_copy.image = engine->black_image.image;
     rgImageUpload(
-            device,
-            engine->transfer_cmd_pool,
-            &image_copy,
-            &extent,
-            sizeof(black_data),
-            black_data);
+        device,
+        engine->transfer_cmd_pool,
+        &image_copy,
+        &extent,
+        sizeof(black_data),
+        black_data);
 
     RgSamplerInfo sampler_info = {};
     sampler_info.anisotropy = true;
@@ -206,16 +307,16 @@ extern "C" Engine *EngineCreate(Allocator *allocator)
 
 extern "C" void EngineDestroy(Engine *engine)
 {
-    RgDevice *device = PlatformGetDevice(engine->platform);
+    RgDevice *device = engine->device;
 
     rgPipelineLayoutDestroy(device, engine->global_pipeline_layout);
     rgDescriptorSetDestroy(device, engine->global_descriptor_set);
     rgDescriptorSetLayoutDestroy(device, engine->global_set_layout);
 
-	EngineFreeImageHandle(engine, &engine->brdf_image);
-	EngineFreeImageHandle(engine, &engine->white_image);
-	EngineFreeImageHandle(engine, &engine->black_image);
-	EngineFreeSamplerHandle(engine, &engine->default_sampler);
+    EngineFreeImageHandle(engine, &engine->brdf_image);
+    EngineFreeImageHandle(engine, &engine->white_image);
+    EngineFreeImageHandle(engine, &engine->black_image);
+    EngineFreeSamplerHandle(engine, &engine->default_sampler);
     rgCmdPoolDestroy(device, engine->transfer_cmd_pool);
     rgCmdPoolDestroy(device, engine->graphics_cmd_pool);
 
@@ -223,17 +324,109 @@ extern "C" void EngineDestroy(Engine *engine)
     PoolDestroy(engine->texture_pool);
     PoolDestroy(engine->sampler_pool);
 
-    PlatformDestroy(engine->platform);
+    rgSwapchainDestroy(engine->device, engine->swapchain);
+    rgDeviceDestroy(engine->device);
+
+    glfwDestroyWindow(engine->window);
+    glfwTerminate();
 
     ArenaDestroy(engine->arena);
 
-    Free(engine->allocator, (void*)engine->exe_dir);
+    Free(engine->allocator, (void *)engine->exe_dir);
     Free(engine->allocator, engine);
 }
 
-extern "C" Platform *EngineGetPlatform(Engine *engine)
+extern "C" RgDevice *EngineGetDevice(Engine *engine)
 {
-    return engine->platform;
+    return engine->device;
+}
+
+extern "C" RgSwapchain *EngineGetSwapchain(Engine *engine)
+{
+    return engine->swapchain;
+}
+
+extern "C" double EngineGetTime(Engine *engine)
+{
+    (void)engine;
+    return glfwGetTime();
+}
+
+extern "C" void EngineGetWindowSize(Engine *engine, uint32_t *width, uint32_t *height)
+{
+    int iwidth, iheight;
+    glfwGetFramebufferSize(engine->window, &iwidth, &iheight);
+    *width = (uint32_t)iwidth;
+    *height = (uint32_t)iheight;
+}
+
+extern "C" bool EngineGetCursorEnabled(Engine *engine)
+{
+    return glfwGetInputMode(engine->window, GLFW_CURSOR) == GLFW_CURSOR_NORMAL;
+}
+
+extern "C" void EngineSetCursorEnabled(Engine *engine, bool enabled)
+{
+    int mode = enabled ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED;
+    glfwSetInputMode(engine->window, GLFW_CURSOR, mode);
+}
+
+extern "C" void EngineGetCursorPos(Engine *engine, double *x, double *y)
+{
+    glfwGetCursorPos(engine->window, x, y);
+}
+
+extern "C" bool EngineGetKeyState(Engine *engine, Key key)
+{
+    int state = glfwGetKey(engine->window, key);
+    switch (state)
+    {
+    case GLFW_PRESS:
+    case GLFW_REPEAT: return true;
+    default: return false;
+    }
+    return false;
+}
+
+extern "C" bool EngineGetButtonState(Engine *engine, Button button)
+{
+    int state = glfwGetMouseButton(engine->window, button);
+    switch (state)
+    {
+    case GLFW_PRESS:
+    case GLFW_REPEAT: return true;
+    default: return false;
+    }
+    return false;
+}
+
+extern "C" bool EngineShouldClose(Engine *engine)
+{
+    return glfwWindowShouldClose(engine->window);
+}
+
+extern "C" void EnginePollEvents(Engine *engine)
+{
+    (void)engine;
+    glfwPollEvents();
+}
+
+extern "C" bool EngineNextEvent(Engine *engine, Event *event)
+{
+    memset(event, 0, sizeof(Event));
+
+    if (event_queue.head != event_queue.tail)
+    {
+        *event = event_queue.events[event_queue.tail];
+        event_queue.tail = (event_queue.tail + 1) % EVENT_CAPACITY;
+    }
+
+    if (event->type == EVENT_WINDOW_RESIZED)
+    {
+        EngineResizeResources(engine);
+    }
+
+    return event->type != EVENT_NONE;
 }
 
 extern "C" const char *EngineGetExeDir(Engine *engine)
@@ -245,9 +438,9 @@ extern "C" uint8_t *EngineLoadFileRelative(
     Engine *engine, Allocator *allocator, const char *relative_path, size_t *size)
 {
     size_t path_size = strlen(engine->exe_dir) + 1 + strlen(relative_path) + 1;
-    char *path = (char*)Allocate(allocator, path_size);
+    char *path = (char *)Allocate(allocator, path_size);
     snprintf(path, path_size, "%s/%s", engine->exe_dir, relative_path);
-    path[path_size-1] = '\0';
+    path[path_size - 1] = '\0';
 
     FILE *f = fopen(path, "rb");
     if (!f) return NULL;
@@ -256,7 +449,7 @@ extern "C" uint8_t *EngineLoadFileRelative(
     *size = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    uint8_t *data = (uint8_t*)Allocate(allocator, *size);
+    uint8_t *data = (uint8_t *)Allocate(allocator, *size);
     size_t read_size = fread(data, 1, *size, f);
     EG_ASSERT(read_size == *size);
 
@@ -269,7 +462,7 @@ extern "C" uint8_t *EngineLoadFileRelative(
 
 RgCmdPool *EngineGetTransferCmdPool(Engine *engine)
 {
-	return engine->transfer_cmd_pool;
+    return engine->transfer_cmd_pool;
 }
 
 extern "C" ImageHandle EngineGetWhiteImage(Engine *engine)
@@ -298,12 +491,12 @@ extern "C" RgPipeline *EngineCreateGraphicsPipeline(Engine *engine, const char *
     EG_ASSERT(pipeline_layout);
 
     size_t hlsl_size = 0;
-    char *hlsl = (char*)
-        EngineLoadFileRelative(engine, engine->allocator, path, &hlsl_size);
+    char *hlsl =
+        (char *)EngineLoadFileRelative(engine, engine->allocator, path, &hlsl_size);
     EG_ASSERT(hlsl);
 
-    RgPipeline *pipeline =
-        PipelineUtilCreateGraphicsPipeline(engine, engine->allocator, pipeline_layout, hlsl, hlsl_size);
+    RgPipeline *pipeline = PipelineUtilCreateGraphicsPipeline(
+        engine, engine->allocator, pipeline_layout, hlsl, hlsl_size);
     EG_ASSERT(pipeline);
 
     Free(engine->allocator, hlsl);
@@ -313,14 +506,14 @@ extern "C" RgPipeline *EngineCreateGraphicsPipeline(Engine *engine, const char *
 
 extern "C" RgPipeline *EngineCreateComputePipeline(Engine *engine, const char *path)
 {
-    Platform *platform = EngineGetPlatform(engine);
-    RgDevice *device = PlatformGetDevice(platform);
+    RgDevice *device = EngineGetDevice(engine);
 
     RgPipelineLayout *pipeline_layout = engine->global_pipeline_layout;
     EG_ASSERT(pipeline_layout);
 
     size_t hlsl_size = 0;
-    char *hlsl = (char*) EngineLoadFileRelative(engine, engine->allocator, path, &hlsl_size);
+    char *hlsl =
+        (char *)EngineLoadFileRelative(engine, engine->allocator, path, &hlsl_size);
     EG_ASSERT(hlsl);
 
     uint8_t *spv_code = NULL;
@@ -347,7 +540,7 @@ extern "C" RgPipeline *EngineCreateComputePipeline(Engine *engine, const char *p
         size_t spirv_size = 0;
         const uint8_t *spirv = tsCompilerOutputGetSpirv(output, &spirv_size);
 
-        spv_code = (uint8_t*)Allocate(engine->allocator, spirv_size);
+        spv_code = (uint8_t *)Allocate(engine->allocator, spirv_size);
         memcpy(spv_code, spirv, spirv_size);
         spv_code_size = spirv_size;
 
@@ -379,18 +572,14 @@ RgDescriptorSet *EngineGetGlobalDescriptorSet(Engine *engine)
 }
 
 static uint32_t EngineAllocateDescriptor(
-    Engine *engine,
-    Pool *pool,
-    uint32_t binding,
-    const RgDescriptor *descriptor)
+    Engine *engine, Pool *pool, uint32_t binding, const RgDescriptor *descriptor)
 {
     EG_ASSERT(engine->global_descriptor_set);
 
     uint32_t handle = PoolAllocateSlot(pool);
     if (handle == UINT32_MAX) return handle;
 
-    Platform *platform = EngineGetPlatform(engine);
-    RgDevice *device = PlatformGetDevice(platform);
+    RgDevice *device = EngineGetDevice(engine);
 
     RgDescriptorUpdateInfo entry = {};
     entry.binding = binding;
@@ -409,94 +598,287 @@ static void EngineFreeDescriptor(Engine *engine, Pool *pool, uint32_t handle)
     PoolFreeSlot(pool, handle);
 }
 
-extern "C" BufferHandle EngineAllocateStorageBufferHandle(Engine *engine, RgBufferInfo *info)
+extern "C" BufferHandle
+EngineAllocateStorageBufferHandle(Engine *engine, RgBufferInfo *info)
 {
-    Platform *platform = EngineGetPlatform(engine);
-    RgDevice *device = PlatformGetDevice(platform);
-
-	BufferHandle handle = {};
-	handle.buffer = rgBufferCreate(device, info);
+    BufferHandle handle = {};
+    handle.buffer = rgBufferCreate(engine->device, info);
 
     RgDescriptor descriptor = {};
     descriptor.buffer.buffer = handle.buffer;
     descriptor.buffer.offset = 0;
     descriptor.buffer.size = 0;
 
-	handle.index = EngineAllocateDescriptor(
-        engine,
-        engine->storage_buffer_pool,
-        0,
-        &descriptor);
+    handle.index =
+        EngineAllocateDescriptor(engine, engine->storage_buffer_pool, 0, &descriptor);
 
-	EG_ASSERT(handle.index != UINT32_MAX);
+    EG_ASSERT(handle.index != UINT32_MAX);
 
-	return handle;
+    return handle;
 }
 
 extern "C" void EngineFreeStorageBufferHandle(Engine *engine, BufferHandle *handle)
 {
-    Platform *platform = EngineGetPlatform(engine);
-    RgDevice *device = PlatformGetDevice(platform);
     EngineFreeDescriptor(engine, engine->storage_buffer_pool, handle->index);
-	rgBufferDestroy(device, handle->buffer);
+    rgBufferDestroy(engine->device, handle->buffer);
 }
 
 extern "C" ImageHandle EngineAllocateImageHandle(Engine *engine, RgImageInfo *info)
 {
-    Platform *platform = EngineGetPlatform(engine);
-    RgDevice *device = PlatformGetDevice(platform);
-
-	ImageHandle handle = {};
-	handle.image = rgImageCreate(device, info);
+    ImageHandle handle = {};
+    handle.image = rgImageCreate(engine->device, info);
 
     RgDescriptor descriptor = {};
     descriptor.image.image = handle.image;
 
-	handle.index = EngineAllocateDescriptor(
-        engine,
-        engine->texture_pool,
-        1,
-        &descriptor);
+    handle.index = EngineAllocateDescriptor(engine, engine->texture_pool, 1, &descriptor);
 
-	EG_ASSERT(handle.index != UINT32_MAX);
+    EG_ASSERT(handle.index != UINT32_MAX);
 
-	return handle;
+    return handle;
 }
 
 extern "C" void EngineFreeImageHandle(Engine *engine, ImageHandle *handle)
 {
-    Platform *platform = EngineGetPlatform(engine);
-    RgDevice *device = PlatformGetDevice(platform);
     EngineFreeDescriptor(engine, engine->texture_pool, handle->index);
-	rgImageDestroy(device, handle->image);
+    rgImageDestroy(engine->device, handle->image);
 }
 
 extern "C" SamplerHandle EngineAllocateSamplerHandle(Engine *engine, RgSamplerInfo *info)
 {
-    Platform *platform = EngineGetPlatform(engine);
-    RgDevice *device = PlatformGetDevice(platform);
-
-	SamplerHandle handle = {};
-	handle.sampler = rgSamplerCreate(device, info);
+    SamplerHandle handle = {};
+    handle.sampler = rgSamplerCreate(engine->device, info);
 
     RgDescriptor descriptor = {};
     descriptor.image.sampler = handle.sampler;
 
-	handle.index = EngineAllocateDescriptor(
-        engine,
-        engine->sampler_pool,
-        2,
-        &descriptor);
+    handle.index = EngineAllocateDescriptor(engine, engine->sampler_pool, 2, &descriptor);
 
-	EG_ASSERT(handle.index != UINT32_MAX);
+    EG_ASSERT(handle.index != UINT32_MAX);
 
-	return handle;
+    return handle;
 }
 
 extern "C" void EngineFreeSamplerHandle(Engine *engine, SamplerHandle *handle)
 {
-    Platform *platform = EngineGetPlatform(engine);
-    RgDevice *device = PlatformGetDevice(platform);
     EngineFreeDescriptor(engine, engine->sampler_pool, handle->index);
-	rgSamplerDestroy(device, handle->sampler);
+    rgSamplerDestroy(engine->device, handle->sampler);
 }
+
+// Event queue {{{
+static char *eventQueueStrdup(const char *string)
+{
+    const size_t size = strlen(string) + 1;
+    char *result = (char *)malloc(size);
+    memcpy(result, string, size);
+    return result;
+}
+
+static Event *eventQueueNewEvent(void)
+{
+    Event *event = event_queue.events + event_queue.head;
+    event_queue.head = (event_queue.head + 1) % EVENT_CAPACITY;
+    EG_ASSERT(event_queue.head != event_queue.tail);
+    memset(event, 0, sizeof(Event));
+    return event;
+}
+
+static void eventQueueWindowPosCallback(GLFWwindow *window, int x, int y)
+{
+    Event *event = eventQueueNewEvent();
+    event->type = EVENT_WINDOW_MOVED;
+    event->window = window;
+    event->pos.x = x;
+    event->pos.y = y;
+}
+
+static void eventQueueWindowSizeCallback(GLFWwindow *window, int width, int height)
+{
+    Event *event = eventQueueNewEvent();
+    event->type = EVENT_WINDOW_RESIZED;
+    event->window = window;
+    event->size.width = width;
+    event->size.height = height;
+}
+
+static void eventQueueWindowCloseCallback(GLFWwindow *window)
+{
+    Event *event = eventQueueNewEvent();
+    event->type = EVENT_WINDOW_CLOSED;
+    event->window = window;
+}
+
+static void eventQueueWindowRefreshCallback(GLFWwindow *window)
+{
+    Event *event = eventQueueNewEvent();
+    event->type = EVENT_WINDOW_REFRESH;
+    event->window = window;
+}
+
+static void eventQueueWindowFocusCallback(GLFWwindow *window, int focused)
+{
+    Event *event = eventQueueNewEvent();
+    event->window = window;
+
+    if (focused)
+        event->type = EVENT_WINDOW_FOCUSED;
+    else
+        event->type = EVENT_WINDOW_DEFOCUSED;
+}
+
+static void eventQueueWindowIconifyCallback(GLFWwindow *window, int iconified)
+{
+    Event *event = eventQueueNewEvent();
+    event->window = window;
+
+    if (iconified)
+        event->type = EVENT_WINDOW_ICONIFIED;
+    else
+        event->type = EVENT_WINDOW_UNICONIFIED;
+}
+
+static void eventQueueFramebufferSizeCallback(GLFWwindow *window, int width, int height)
+{
+    Event *event = eventQueueNewEvent();
+    event->type = EVENT_FRAMEBUFFER_RESIZED;
+    event->window = window;
+    event->size.width = width;
+    event->size.height = height;
+}
+
+static void
+eventQueueMouseButtonCallback(GLFWwindow *window, int button, int action, int mods)
+{
+    Event *event = eventQueueNewEvent();
+    event->window = window;
+    event->mouse.button = button;
+    event->mouse.mods = mods;
+
+    if (action == GLFW_PRESS)
+        event->type = EVENT_BUTTON_PRESSED;
+    else if (action == GLFW_RELEASE)
+        event->type = EVENT_BUTTON_RELEASED;
+}
+
+static void eventQueueCursorPosCallback(GLFWwindow *window, double x, double y)
+{
+    Event *event = eventQueueNewEvent();
+    event->type = EVENT_CURSOR_MOVED;
+    event->window = window;
+    event->pos.x = (int)x;
+    event->pos.y = (int)y;
+}
+
+static void eventQueueCursorEnterCallback(GLFWwindow *window, int entered)
+{
+    Event *event = eventQueueNewEvent();
+    event->window = window;
+
+    if (entered)
+        event->type = EVENT_CURSOR_ENTERED;
+    else
+        event->type = EVENT_CURSOR_LEFT;
+}
+
+static void eventQueueScrollCallback(GLFWwindow *window, double x, double y)
+{
+    Event *event = eventQueueNewEvent();
+    event->type = EVENT_SCROLLED;
+    event->window = window;
+    event->scroll.x = x;
+    event->scroll.y = y;
+}
+
+static void
+eventQueueKeyCallback(GLFWwindow *window, int key, int scancode, int action, int mods)
+{
+    Event *event = eventQueueNewEvent();
+    event->window = window;
+    event->keyboard.key = key;
+    event->keyboard.scancode = scancode;
+    event->keyboard.mods = mods;
+
+    if (action == GLFW_PRESS)
+        event->type = EVENT_KEY_PRESSED;
+    else if (action == GLFW_RELEASE)
+        event->type = EVENT_KEY_RELEASED;
+    else if (action == GLFW_REPEAT)
+        event->type = EVENT_KEY_REPEATED;
+}
+
+static void eventQueueCharCallback(GLFWwindow *window, unsigned int codepoint)
+{
+    Event *event = eventQueueNewEvent();
+    event->type = EVENT_CODEPOINT_INPUT;
+    event->window = window;
+    event->codepoint = codepoint;
+}
+
+static void eventQueueMonitorCallback(GLFWmonitor *monitor, int action)
+{
+    Event *event = eventQueueNewEvent();
+    event->monitor = monitor;
+
+    if (action == GLFW_CONNECTED)
+        event->type = EVENT_MONITOR_CONNECTED;
+    else if (action == GLFW_DISCONNECTED)
+        event->type = EVENT_MONITOR_DISCONNECTED;
+}
+
+static void eventQueueFileDropCallback(GLFWwindow *window, int count, const char **paths)
+{
+    Event *event = eventQueueNewEvent();
+    event->type = EVENT_FILE_DROPPED;
+    event->window = window;
+    event->file.paths = (char **)malloc(count * sizeof(char *));
+    event->file.count = count;
+
+    while (count--)
+        event->file.paths[count] = eventQueueStrdup(paths[count]);
+}
+
+static void eventQueueJoystickCallback(int jid, int action)
+{
+    Event *event = eventQueueNewEvent();
+    event->joystick = jid;
+
+    if (action == GLFW_CONNECTED)
+        event->type = EVENT_JOYSTICK_CONNECTED;
+    else if (action == GLFW_DISCONNECTED)
+        event->type = EVENT_JOYSTICK_DISCONNECTED;
+}
+
+static void eventQueueWindowMaximizeCallback(GLFWwindow *window, int maximized)
+{
+    Event *event = eventQueueNewEvent();
+    event->window = window;
+
+    if (maximized)
+        event->type = EVENT_WINDOW_MAXIMIZED;
+    else
+        event->type = EVENT_WINDOW_UNMAXIMIZED;
+}
+
+static void
+eventQueueWindowContentScaleCallback(GLFWwindow *window, float xscale, float yscale)
+{
+    Event *event = eventQueueNewEvent();
+    event->window = window;
+    event->type = EVENT_WINDOW_SCALE_CHANGED;
+    event->scale.x = xscale;
+    event->scale.y = yscale;
+}
+
+static inline void eventFree(Event *event)
+{
+    if (event->type == EVENT_FILE_DROPPED)
+    {
+        while (event->file.count--)
+            free(event->file.paths[event->file.count]);
+
+        free(event->file.paths);
+    }
+
+    memset(event, 0, sizeof(Event));
+}
+// }}}

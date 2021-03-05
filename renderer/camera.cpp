@@ -1,7 +1,6 @@
 #include "camera.h"
 
 #include "math.h"
-#include "platform.h"
 #include "engine.h"
 
 extern "C" void FPSCameraInit(FPSCamera *camera, Engine *engine)
@@ -20,12 +19,10 @@ extern "C" void FPSCameraInit(FPSCamera *camera, Engine *engine)
 
 extern "C" CameraUniform FPSCameraUpdate(FPSCamera *camera, float delta_time)
 {
-    Platform *platform = EngineGetPlatform(camera->engine);
-
-    if (!PlatformGetCursorEnabled(platform))
+    if (!EngineGetCursorEnabled(camera->engine))
     {
         double cx, cy;
-        PlatformGetCursorPos(platform, &cx, &cy);
+        EngineGetCursorPos(camera->engine, &cx, &cy);
 
         float dx = (float)(cx - camera->prev_x);
         float dy = (float)(cy - camera->prev_y);
@@ -51,25 +48,25 @@ extern "C" CameraUniform FPSCameraUpdate(FPSCamera *camera, float delta_time)
     float3 forward_increment = eg_float3_mul_scalar(front, delta);
     float3 right_increment = eg_float3_mul_scalar(right, delta);
 
-    if (PlatformGetKeyState(platform, KEY_W))
+    if (EngineGetKeyState(camera->engine, KEY_W))
     {
         camera->pos = eg_float3_add(camera->pos, forward_increment);
     }
-    if (PlatformGetKeyState(platform, KEY_S))
+    if (EngineGetKeyState(camera->engine, KEY_S))
     {
         camera->pos = eg_float3_sub(camera->pos, forward_increment);
     }
-    if (PlatformGetKeyState(platform, KEY_A))
+    if (EngineGetKeyState(camera->engine, KEY_A))
     {
         camera->pos = eg_float3_sub(camera->pos, right_increment);
     }
-    if (PlatformGetKeyState(platform, KEY_D))
+    if (EngineGetKeyState(camera->engine, KEY_D))
     {
         camera->pos = eg_float3_add(camera->pos, right_increment);
     }
 
     uint32_t width, height;
-    PlatformGetWindowSize(platform, &width, &height);
+    EngineGetWindowSize(camera->engine, &width, &height);
 
     float4x4 correction_matrix = eg_float4x4_diagonal(1.0f);
     correction_matrix.yy = -1.0f;

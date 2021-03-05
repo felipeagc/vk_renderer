@@ -3,7 +3,6 @@
 #include <string.h>
 #include "rg.h"
 #include "allocator.h"
-#include "platform.h"
 #include "engine.h"
 
 struct BufferPool
@@ -27,8 +26,7 @@ BufferPool *BufferPoolCreate(Allocator *allocator, Engine *engine, size_t item_s
 	BufferPool *pool = Allocate(allocator, sizeof(*pool));
 	memset(pool, 0, sizeof(*pool));
 
-    Platform *platform = EngineGetPlatform(engine);
-    RgDevice *device = PlatformGetDevice(platform);
+    RgDevice *device = EngineGetDevice(engine);
 
 	pool->allocator = allocator;
 	pool->engine = engine;
@@ -48,8 +46,7 @@ BufferPool *BufferPoolCreate(Allocator *allocator, Engine *engine, size_t item_s
 
 void BufferPoolDestroy(BufferPool *pool)
 {
-    Platform *platform = EngineGetPlatform(pool->engine);
-    RgDevice *device = PlatformGetDevice(platform);
+    RgDevice *device = EngineGetDevice(pool->engine);
 
     rgBufferUnmap(device, pool->buffer.buffer);
 	EngineFreeStorageBufferHandle(pool->engine, &pool->buffer);

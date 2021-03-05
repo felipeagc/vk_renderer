@@ -7,7 +7,6 @@
 #include <rg.h>
 #include <spirv.h>
 #include "allocator.h"
-#include "platform.h"
 #include "engine.h"
 #include "math.h"
 #include "array.hpp"
@@ -131,8 +130,7 @@ extern "C" RgPipeline *PipelineUtilCreateGraphicsPipeline(
         RgPipelineLayout *pipeline_layout,
         const char *hlsl, size_t hlsl_size)
 {
-    Platform *platform = EngineGetPlatform(engine);
-    RgDevice *device = PlatformGetDevice(platform);
+    RgDevice *device = EngineGetDevice(engine);
 
     uint8_t *vertex_code = NULL;
     size_t vertex_code_size = 0;

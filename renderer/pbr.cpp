@@ -3,13 +3,11 @@
 #include <rg.h>
 #include "allocator.h"
 #include "engine.h"
-#include "platform.h"
 #include "pipeline_util.h"
 
 extern "C" ImageHandle GenerateBRDFLUT(Engine *engine, RgCmdPool *cmd_pool, uint32_t dim)
 {
-    Platform *platform = EngineGetPlatform(engine);
-    RgDevice *device = PlatformGetDevice(platform);
+    RgDevice *device = EngineGetDevice(engine);
 
     RgImageInfo info = {};
     info.extent = { dim, dim, 1 };

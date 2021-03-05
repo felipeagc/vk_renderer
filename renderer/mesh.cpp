@@ -2,7 +2,6 @@
 
 #include "math.h"
 #include "allocator.h"
-#include "platform.h"
 #include "engine.h"
 #include "array.hpp"
 
@@ -21,8 +20,6 @@ Mesh *MeshCreateCube(Allocator *allocator, Engine *engine, RgCmdPool *cmd_pool)
     *mesh = {};
     mesh->allocator = allocator;
     mesh->engine = engine;
-
-    Platform *platform = EngineGetPlatform(engine);
 
     Vertex vertices[8] = {
         {V3( 0.5, 0.5,  0.5), {}, {}, {}},
@@ -66,7 +63,7 @@ Mesh *MeshCreateCube(Allocator *allocator, Engine *engine, RgCmdPool *cmd_pool)
     index_buffer_info.usage = RG_BUFFER_USAGE_INDEX | RG_BUFFER_USAGE_TRANSFER_DST;
     index_buffer_info.memory = RG_BUFFER_MEMORY_DEVICE;
 
-    RgDevice *device = PlatformGetDevice(platform);
+    RgDevice *device = EngineGetDevice(engine);
 
     mesh->vertex_buffer = rgBufferCreate(device, &vertex_buffer_info);
     mesh->index_buffer = rgBufferCreate(device, &index_buffer_info);
@@ -90,8 +87,6 @@ Mesh *MeshCreateUVSphere(
     *mesh = {};
     mesh->allocator = allocator;
     mesh->engine = engine;
-
-    Platform *platform = EngineGetPlatform(engine);
 
     Array<Vertex> vertices = Array<Vertex>::create(allocator);
     Array<uint32_t> indices = Array<uint32_t>::create(allocator);
@@ -204,7 +199,7 @@ Mesh *MeshCreateUVSphere(
     index_buffer_info.usage = RG_BUFFER_USAGE_INDEX | RG_BUFFER_USAGE_TRANSFER_DST;
     index_buffer_info.memory = RG_BUFFER_MEMORY_DEVICE;
 
-    RgDevice *device = PlatformGetDevice(platform);
+    RgDevice *device = EngineGetDevice(mesh->engine);
 
     mesh->vertex_buffer = rgBufferCreate(device, &vertex_buffer_info);
     mesh->index_buffer = rgBufferCreate(device, &index_buffer_info);
@@ -221,8 +216,7 @@ Mesh *MeshCreateUVSphere(
 
 void MeshDestroy(Mesh *mesh)
 {
-    Platform *platform = EngineGetPlatform(mesh->engine);
-    RgDevice *device = PlatformGetDevice(platform);
+    RgDevice *device = EngineGetDevice(mesh->engine);
 
     rgBufferDestroy(device, mesh->vertex_buffer);
     rgBufferDestroy(device, mesh->index_buffer);

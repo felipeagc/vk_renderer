@@ -8,7 +8,6 @@
 #include "math.h"
 #include "array.hpp"
 #include "allocator.h"
-#include "platform.h"
 #include "engine.h"
 #include "mesh.h"
 #include "buffer_pool.h"
@@ -208,8 +207,7 @@ ModelAssetFromGltf(ModelManager *manager, const uint8_t *data, size_t size)
 {
     Engine *engine = manager->engine;
     Allocator *allocator = manager->allocator;
-    Platform *platform = EngineGetPlatform(engine);
-    RgDevice *device = PlatformGetDevice(platform);
+    RgDevice *device = EngineGetDevice(engine);
     RgCmdPool *transfer_cmd_pool = EngineGetTransferCmdPool(engine);
 
     ModelAsset *model = (ModelAsset *)Allocate(allocator, sizeof(ModelAsset));
@@ -762,8 +760,7 @@ extern "C" ModelAsset *ModelAssetFromMesh(ModelManager *manager, Mesh *mesh)
 extern "C" void ModelAssetDestroy(ModelAsset *model)
 {
     Engine *engine = model->manager->engine;
-    Platform *platform = EngineGetPlatform(engine);
-    RgDevice *device = PlatformGetDevice(platform);
+    RgDevice *device = EngineGetDevice(engine);
 
     switch (model->type)
     {
