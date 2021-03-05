@@ -11,16 +11,16 @@ typedef struct Engine Engine;
 
 typedef struct alignas(16) CameraUniform
 {
-    Vec4 pos;
-    Mat4 view;
-    Mat4 proj;
+    float4 pos;
+    float4x4 view;
+    float4x4 proj;
 } CameraUniform;
 
 typedef struct FPSCamera
 {
     Engine *engine;
 
-    Vec3 pos;
+    float3 pos;
     float yaw;
     float pitch;
     float fovy;

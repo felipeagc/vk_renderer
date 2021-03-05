@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdalign.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -7,6 +8,14 @@
 
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+#if defined(_MSC_VER)
+#define EG_INLINE __forceinline
+#elif defined(__clang__) || defined(__GNUC__)
+#define EG_INLINE __attribute__((always_inline)) __attribute__((unused)) inline
+#else
+#define EG_INLINE inline
 #endif
 
 #define EG_STR(a) #a
@@ -25,6 +34,12 @@ extern "C" {
             abort();                                                                     \
         }                                                                                \
     } while (0)
+
+#ifndef __cplusplus
+#define EG_STATIC_ASSERT(value, msg) _Static_assert(value, msg)
+#else
+#define EG_STATIC_ASSERT(value, msg) static_assert(value, msg)
+#endif
 
 #ifdef __cplusplus
 }

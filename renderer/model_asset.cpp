@@ -26,15 +26,15 @@ struct ModelManager
     uint32_t current_camera_index;
 };
 
-struct alignas(16) ModelUniform
+struct ModelUniform
 {
-    Mat4 transform;
+    float4x4 transform;
 };
 
-struct alignas(16) MaterialUniform
+struct MaterialUniform
 {
-    Vec4 base_color;
-    Vec4 emissive;
+    float4 base_color;
+    float4 emissive;
 
     float metallic;
     float roughness;
@@ -55,8 +55,8 @@ enum ModelType {
 
 struct Material
 {
-    Vec4 base_color;
-    Vec4 emissive;
+    float4 base_color;
+    float4 emissive;
 
     float metallic;
     float roughness;
@@ -91,12 +91,12 @@ struct Node
     int64_t parent_index = -1;
     Array<uint32_t> children_indices;
 
-    Mat4 matrix = Mat4Diagonal(1.0f);
+    float4x4 matrix = eg_float4x4_diagonal(1.0f);
     int64_t mesh_index = -1;
 
-    Vec3 translation = V3(0.0, 0.0, 0.0);
-    Vec3 scale = V3(1.0, 1.0, 1.0);
-    Quat rotation = {0.0, 0.0, 0.0, 1.0};
+    float3 translation = V3(0.0, 0.0, 0.0);
+    float3 scale = V3(1.0, 1.0, 1.0);
+    quat128 rotation = {0.0, 0.0, 0.0, 1.0};
 };
 
 struct ModelAsset
@@ -116,28 +116,28 @@ struct ModelAsset
     Array<SamplerHandle> samplers;
 };
 
-static Mat4 NodeLocalMatrix(Node *node)
+static float4x4 NodeLocalMatrix(Node *node)
 {
-    Mat4 result = node->matrix;
+    float4x4 result = node->matrix;
 
-    Mat4Scale(&result, node->scale);
+    eg_float4x4_scale(&result, node->scale);
 
-    Mat4 rot_mat = QuatToMat4(node->rotation);
-    result = Mat4Mul(&result, &rot_mat);
+    float4x4 rot_mat = eg_quat_to_matrix(node->rotation);
+    result = eg_float4x4_mul(&result, &rot_mat);
 
-    Mat4Translate(&result, node->translation);
+    eg_float4x4_translate(&result, node->translation);
 
     return result;
 }
 
-static Mat4 NodeResolveMatrix(Node *node, ModelAsset *model)
+static float4x4 NodeResolveMatrix(Node *node, ModelAsset *model)
 {
-    Mat4 m = NodeLocalMatrix(node);
+    float4x4 m = NodeLocalMatrix(node);
     int32_t p = node->parent_index;
     while (p != -1)
     {
-        Mat4 parent_local_mat = NodeLocalMatrix(&model->nodes[p]);
-        m = Mat4Mul(&m, &parent_local_mat);
+        float4x4 parent_local_mat = NodeLocalMatrix(&model->nodes[p]);
+        m = eg_float4x4_mul(&m, &parent_local_mat);
         p = model->nodes[p].parent_index;
     }
 
@@ -626,11 +626,11 @@ ModelAssetFromGltf(ModelManager *manager, const uint8_t *data, size_t size)
             .parent_index = -1,
             .children_indices = Array<uint32_t>::create(allocator),
 
-            .matrix = Mat4Diagonal(1.0f),
+            .matrix = eg_float4x4_diagonal(1.0f),
             .mesh_index = -1,
 
-            .translation = {0.0, 0.0, 0.0},
-            .scale = {1.0, 1.0, 1.0},
+            .translation = V3(0.0, 0.0, 0.0),
+            .scale = V3(1.0, 1.0, 1.0),
             .rotation = {0.0, 0.0, 0.0, 1.0},
         };
 
@@ -737,7 +737,7 @@ extern "C" ModelAsset *ModelAssetFromMesh(ModelManager *manager, Mesh *mesh)
     model->meshes.push_back(model_mesh);
 
     Node node = {};
-    node.matrix = Mat4Diagonal(1.0f);
+    node.matrix = eg_float4x4_diagonal(1.0f);
     node.mesh_index = 0;
 
     model->nodes.push_back(node);
@@ -803,7 +803,7 @@ extern "C" void ModelAssetDestroy(ModelAsset *model)
 }
 
 static void
-NodeRender(ModelAsset *model, Node *node, RgCmdBuffer *cmd_buffer, Mat4 *transform)
+NodeRender(ModelAsset *model, Node *node, RgCmdBuffer *cmd_buffer, float4x4 *transform)
 {
     (void)node;
     (void)cmd_buffer;
@@ -888,7 +888,7 @@ NodeRender(ModelAsset *model, Node *node, RgCmdBuffer *cmd_buffer, Mat4 *transfo
 }
 
 extern "C" void
-ModelAssetRender(ModelAsset *model, RgCmdBuffer *cmd_buffer, Mat4 *transform)
+ModelAssetRender(ModelAsset *model, RgCmdBuffer *cmd_buffer, float4x4 *transform)
 {
     EG_ASSERT(transform);
     rgCmdBindVertexBuffer(cmd_buffer, model->vertex_buffer, 0);

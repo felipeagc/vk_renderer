@@ -451,7 +451,7 @@ static void AnalyzeSpirv(
                 if (!id->is_builtin && stage == RG_SHADER_STAGE_VERTEX)
                 {
                     module->attributes_count =
-                        max(module->attributes_count, id->location + 1);
+                        EG_MAX(module->attributes_count, id->location + 1);
                     RgVertexAttribute *attrib = &module->attributes[id->location];
 
                     if (pointed_type->opcode == SpvOpTypeVector)

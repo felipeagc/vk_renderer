@@ -210,20 +210,20 @@ void AppRenderFrame(App *app)
     ModelManagerBeginFrame(app->model_manager, &camera_uniform);
 
     {
-        Mat4 transform = Mat4Diagonal(1.0f);
-        Mat4Translate(&transform, V3(-2.0, 0.0, 2.0));
+        float4x4 transform = eg_float4x4_diagonal(1.0f);
+        eg_float4x4_translate(&transform, V3(-2.0, 0.0, 2.0));
         ModelAssetRender(app->model_asset, cmd_buffer, &transform);
     }
 
     {
-        Mat4 transform = Mat4Diagonal(1.0f);
-        Mat4Translate(&transform, V3(0.0, 0.0, 2.0));
+        float4x4 transform = eg_float4x4_diagonal(1.0f);
+        eg_float4x4_translate(&transform, V3(0.0, 0.0, 2.0));
         ModelAssetRender(app->model_asset, cmd_buffer, &transform);
     }
 
     {
-        Mat4 transform = Mat4Diagonal(1.0f);
-        Mat4Translate(&transform, V3(2.0, 0.0, 2.0));
+        float4x4 transform = eg_float4x4_diagonal(1.0f);
+        eg_float4x4_translate(&transform, V3(2.0, 0.0, 2.0));
         ModelAssetRender(app->gltf_asset, cmd_buffer, &transform);
     }
 

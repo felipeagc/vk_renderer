@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include "math_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -9,7 +10,6 @@ extern "C" {
 
 typedef struct Allocator Allocator;
 typedef struct Engine Engine;
-typedef union Mat4 Mat4;
 typedef struct Mesh Mesh;
 typedef struct RgCmdBuffer RgCmdBuffer;
 typedef struct BufferPool BufferPool;
@@ -32,7 +32,7 @@ ModelAsset *ModelAssetFromMesh(
         ModelManager *manager,
         Mesh *mesh);
 void ModelAssetDestroy(ModelAsset *model);
-void ModelAssetRender(ModelAsset *model, RgCmdBuffer *cmd_buffer, Mat4 *transform);
+void ModelAssetRender(ModelAsset *model, RgCmdBuffer *cmd_buffer, float4x4 *transform);
 
 #ifdef __cplusplus
 }

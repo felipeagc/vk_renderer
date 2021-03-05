@@ -97,9 +97,9 @@ Mesh *MeshCreateUVSphere(
     Array<uint32_t> indices = Array<uint32_t>::create(allocator);
 
     float step = 1.0f / (float)divisions;
-    Vec3 step3 = V3(step, step, step);
+    float3 step3 = V3(step, step, step);
 
-    Vec3 origins[6] = {
+    float3 origins[6] = {
         V3(-1.0, -1.0, -1.0),
         V3(1.0, -1.0, -1.0),
         V3(1.0, -1.0, 1.0),
@@ -107,7 +107,7 @@ Mesh *MeshCreateUVSphere(
         V3(-1.0, 1.0, -1.0),
         V3(-1.0, -1.0, 1.0),
     };
-    Vec3 rights[6] = {
+    float3 rights[6] = {
         V3(2.0, 0.0, 0.0),
         V3(0.0, 0.0, 2.0),
         V3(-2.0, 0.0, 0.0),
@@ -115,7 +115,7 @@ Mesh *MeshCreateUVSphere(
         V3(2.0, 0.0, 0.0),
         V3(2.0, 0.0, 0.0),
     };
-    Vec3 ups[6] = {
+    float3 ups[6] = {
         V3(0.0, 2.0, 0.0),
         V3(0.0, 2.0, 0.0),
         V3(0.0, 2.0, 0.0),
@@ -127,20 +127,24 @@ Mesh *MeshCreateUVSphere(
     {
         for (uint32_t face = 0; face < 6; ++face)
         {
-            Vec3 origin = origins[face];
-            Vec3 right = rights[face];
-            Vec3 up = ups[face];
+            float3 origin = origins[face];
+            float3 right = rights[face];
+            float3 up = ups[face];
 
             for (uint32_t j = 0; j < divisions + 1; ++j)
             {
-                Vec3 jv = V3((float)j, (float)j, (float)j);
+                float3 jv = V3((float)j, (float)j, (float)j);
 
                 for (uint32_t i = 0; i < divisions + 1; ++i)
                 {
-                    Vec3 iv = V3((float)i, (float)i, (float)i);
+                    float3 iv = V3((float)i, (float)i, (float)i);
 
-                    Vec3 p = origin + (step3 * (iv * right + jv * up));
-                    p = Vec3Normalize(p) * radius;
+                    float3 ivright = eg_float3_mul(iv, right);
+                    float3 jvup = eg_float3_mul(jv, up);
+                    float3 sum = eg_float3_add(ivright, jvup);
+
+                    float3 p = eg_float3_add(origin, eg_float3_mul(step3, sum));
+                    p = eg_float3_mul_scalar(eg_float3_normalize(p), radius);
 
                     vertices.push_back(Vertex{p, {}, {}, {}});
                 }

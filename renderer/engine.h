@@ -24,10 +24,10 @@ typedef struct Engine Engine;
 
 typedef struct Vertex
 {
-    Vec3 pos;
-    Vec3 normal;
-    Vec4 tangent;
-    Vec2 uv;
+    float3 pos;
+    float3 normal;
+    float tangent[4];
+    float2 uv;
 } Vertex;
 
 typedef struct ImageHandle
