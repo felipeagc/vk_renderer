@@ -4,8 +4,7 @@
 
 typedef struct Allocator Allocator;
 
-typedef enum ConfigValueType
-{
+typedef enum ConfigValueType {
     CONFIG_VALUE_STRING,
     CONFIG_VALUE_INT,
     CONFIG_VALUE_FLOAT,
@@ -30,10 +29,7 @@ const char *ConfigValueGetString(ConfigValue *value);
 
 ConfigValue *ConfigValueObjectGetField(ConfigValue *value, const char *name);
 size_t ConfigValueObjectGetAllFields(
-    ConfigValue *value,
-    Allocator *allocator,
-    const char ***names,
-    ConfigValue ***values);
+    ConfigValue *value, Allocator *allocator, const char ***names, ConfigValue ***values);
 
 size_t ConfigValueArrayGetLength(ConfigValue *value);
 ConfigValue *ConfigValueArrayGetElement(ConfigValue *value, size_t index);

@@ -9,7 +9,7 @@ extern "C" void FPSCameraInit(FPSCamera *camera, Engine *engine)
     *camera = {};
     camera->engine = engine;
     camera->pos = V3(0.0f, 0.0f, 0.0f);
-    camera->yaw = 0.0f;
+    camera->yaw = EG_RADIANS(180.0f);
     camera->pitch = 0.0f;
     camera->fovy = EG_RADIANS(75.0f);
     camera->prev_x = 0;
@@ -34,15 +34,14 @@ extern "C" CameraUniform FPSCameraUpdate(FPSCamera *camera, float delta_time)
         camera->prev_y = cy;
 
         camera->yaw -= EG_RADIANS(dx * camera->sensitivity);
-        camera->pitch += EG_RADIANS(dy * camera->sensitivity);
+        camera->pitch -= EG_RADIANS(dy * camera->sensitivity);
         camera->pitch = EG_CLAMP(camera->pitch, EG_RADIANS(-89.0f), EG_RADIANS(89.0f));
     }
 
-    float3 front = eg_float3_normalize(V3(
-        sinf(camera->yaw) * cosf(camera->pitch),
-        sinf(camera->pitch),
-        cosf(camera->yaw) * cosf(camera->pitch)
-    ));
+    float3 front = eg_float3_normalize(
+        V3(sinf(camera->yaw) * cosf(camera->pitch),
+           sinf(camera->pitch),
+           cosf(camera->yaw) * cosf(camera->pitch)));
 
     float3 right = eg_float3_cross(front, V3(0.0f, 1.0f, 0.0f));
     float3 up = eg_float3_cross(right, front);
@@ -72,9 +71,14 @@ extern "C" CameraUniform FPSCameraUpdate(FPSCamera *camera, float delta_time)
     uint32_t width, height;
     PlatformGetWindowSize(platform, &width, &height);
 
+    float4x4 correction_matrix = eg_float4x4_diagonal(1.0f);
+    correction_matrix.yy = -1.0f;
+
     float aspect_ratio = (float)width / (float)height;
     float4x4 proj = eg_float4x4_perspective_reverse_z(camera->fovy, aspect_ratio, 0.1f);
-    float4x4 view = eg_float4x4_look_at(camera->pos, eg_float3_add(camera->pos, front), up);
+    proj = eg_float4x4_mul(&correction_matrix, &proj);
+    float4x4 view =
+        eg_float4x4_look_at(camera->pos, eg_float3_add(camera->pos, front), up);
 
     CameraUniform uniform = {};
     uniform.pos = {

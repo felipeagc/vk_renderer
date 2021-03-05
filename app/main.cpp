@@ -211,19 +211,19 @@ void AppRenderFrame(App *app)
 
     {
         float4x4 transform = eg_float4x4_diagonal(1.0f);
-        eg_float4x4_translate(&transform, V3(-2.0, 0.0, 2.0));
+        eg_float4x4_translate(&transform, V3(-2.0, 0.0, -2.0));
         ModelAssetRender(app->model_asset, cmd_buffer, &transform);
     }
 
     {
         float4x4 transform = eg_float4x4_diagonal(1.0f);
-        eg_float4x4_translate(&transform, V3(0.0, 0.0, 2.0));
+        eg_float4x4_translate(&transform, V3(0.0, 0.0, -2.0));
         ModelAssetRender(app->model_asset, cmd_buffer, &transform);
     }
 
     {
         float4x4 transform = eg_float4x4_diagonal(1.0f);
-        eg_float4x4_translate(&transform, V3(2.0, 0.0, 2.0));
+        eg_float4x4_translate(&transform, V3(2.0, 0.0, -2.0));
         ModelAssetRender(app->gltf_asset, cmd_buffer, &transform);
     }
 

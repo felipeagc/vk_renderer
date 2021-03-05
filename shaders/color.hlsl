@@ -1,4 +1,4 @@
-#pragma cull_mode back
+#pragma cull_mode front
 
 struct Camera
 {

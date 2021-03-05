@@ -12,8 +12,8 @@
 #define EG_CLAMP(x, lo, hi) (((x) < (lo)) ? (lo) : (((x) > (hi)) ? (hi) : (x)))
 #define EG_LERP(v1, v2, t) ((1 - (t)) * (v1) + (t) * (v2))
 
-#define EG_RADIANS(deg) deg *(EG_PI / 180.0f)
-#define EG_DEGREES(radians) radians *(180.0f / PI)
+#define EG_RADIANS(deg) (deg * (EG_PI / 180.0f))
+#define EG_DEGREES(radians) (radians * (180.0f / PI))
 
 EG_INLINE
 static float2 V2(float x, float y)

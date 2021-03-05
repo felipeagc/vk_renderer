@@ -92,6 +92,7 @@ struct Node
     Array<uint32_t> children_indices;
 
     float4x4 matrix = eg_float4x4_diagonal(1.0f);
+    float4x4 resolved_matrix = eg_float4x4_diagonal(1.0f);
     int64_t mesh_index = -1;
 
     float3 translation = V3(0.0, 0.0, 0.0);
@@ -118,16 +119,18 @@ struct ModelAsset
 
 static float4x4 NodeLocalMatrix(Node *node)
 {
-    float4x4 result = node->matrix;
-
-    eg_float4x4_scale(&result, node->scale);
-
-    float4x4 rot_mat = eg_quat_to_matrix(node->rotation);
-    result = eg_float4x4_mul(&result, &rot_mat);
+    float4x4 result = eg_float4x4_diagonal(1.0f);
 
     eg_float4x4_translate(&result, node->translation);
 
-    return result;
+    float3 axis;
+    float angle;
+    eg_quat_to_axis_angle(node->rotation, &axis, &angle);
+    eg_float4x4_rotate(&result, angle, axis);
+
+    eg_float4x4_scale(&result, node->scale);
+
+    return eg_float4x4_mul(&result, &node->matrix);
 }
 
 static float4x4 NodeResolveMatrix(Node *node, ModelAsset *model)
@@ -627,6 +630,7 @@ ModelAssetFromGltf(ModelManager *manager, const uint8_t *data, size_t size)
             .children_indices = Array<uint32_t>::create(allocator),
 
             .matrix = eg_float4x4_diagonal(1.0f),
+            .resolved_matrix = eg_float4x4_diagonal(1.0f),
             .mesh_index = -1,
 
             .translation = V3(0.0, 0.0, 0.0),
@@ -689,7 +693,7 @@ ModelAssetFromGltf(ModelManager *manager, const uint8_t *data, size_t size)
 
     for (size_t i = 0; i < model->nodes.length; ++i)
     {
-        model->nodes[i].matrix = NodeResolveMatrix(&model->nodes[i], model);
+        model->nodes[i].resolved_matrix = NodeResolveMatrix(&model->nodes[i], model);
     }
 
     indices.free();
@@ -738,6 +742,7 @@ extern "C" ModelAsset *ModelAssetFromMesh(ModelManager *manager, Mesh *mesh)
 
     Node node = {};
     node.matrix = eg_float4x4_diagonal(1.0f);
+    node.resolved_matrix = eg_float4x4_diagonal(1.0f);
     node.mesh_index = 0;
 
     model->nodes.push_back(node);
@@ -809,7 +814,7 @@ NodeRender(ModelAsset *model, Node *node, RgCmdBuffer *cmd_buffer, float4x4 *tra
     (void)cmd_buffer;
 
     ModelUniform model_uniform = {};
-    model_uniform.transform = *transform;
+    model_uniform.transform = eg_float4x4_mul(&node->resolved_matrix, transform);
 
     if (node->mesh_index != -1)
     {

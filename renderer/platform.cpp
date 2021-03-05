@@ -61,7 +61,7 @@ static void PlatformResizeResources(Platform *platform)
     RgSwapchain *old_swapchain = platform->swapchain;
 
     RgSwapchainInfo swapchain_info = {};
-    swapchain_info.vsync = true;
+    swapchain_info.vsync = false;
     swapchain_info.old_swapchain = old_swapchain;
 
     swapchain_info.width = width;
