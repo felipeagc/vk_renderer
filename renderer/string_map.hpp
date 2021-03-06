@@ -4,7 +4,7 @@
 #include <string.h>
 #include "allocator.h"
 
-static inline uint64_t StringMapHash(const char *string)
+static inline uint64_t egStringMapHash(const char *string)
 {
     uint64_t hash = 14695981039346656037ULL;
     while (*string)
@@ -16,7 +16,7 @@ static inline uint64_t StringMapHash(const char *string)
 }
 
 template <typename T>
-struct StringMap
+struct EgStringMap
 {
     struct Slot
     {
@@ -27,7 +27,7 @@ struct StringMap
 
     struct Iterator
     {
-        StringMap *map;
+        EgStringMap *map;
         uint64_t index;
 
     public:
@@ -51,15 +51,15 @@ struct StringMap
         friend bool operator!= (const Iterator& a, const Iterator& b) { return a.index != b.index; };
     };
 
-    Allocator *allocator = nullptr;
+    EgAllocator *allocator = nullptr;
     Slot *slots = nullptr;
     uint64_t size = 0;
 
     void grow();
 
-    static inline StringMap create(Allocator *allocator, uint64_t size = 16)
+    static inline EgStringMap create(EgAllocator *allocator, uint64_t size = 16)
     {
-        StringMap map = {};
+        EgStringMap map = {};
         map.allocator = allocator;
         map.size = size;
 
@@ -72,7 +72,7 @@ struct StringMap
         map.size |= map.size >> 32;
         map.size += 1;
 
-        map.slots = (Slot*)Allocate(map.allocator, sizeof(*map.slots) * map.size);
+        map.slots = (Slot*)egAllocate(map.allocator, sizeof(*map.slots) * map.size);
         memset(map.slots, 0, sizeof(*map.slots) * map.size);
 
         return map;
@@ -80,7 +80,7 @@ struct StringMap
 
     void set(const char *key, T value)
     {
-        uint64_t hash = StringMapHash(key);
+        uint64_t hash = egStringMapHash(key);
         uint64_t i = hash & (this->size - 1);
         uint64_t iters = 0;
 
@@ -104,7 +104,7 @@ struct StringMap
 
     bool get(const char *key, T *value)
     {
-        uint64_t hash = StringMapHash(key);
+        uint64_t hash = egStringMapHash(key);
         uint64_t i = hash & (this->size - 1);
         uint64_t iters = 0;
 
@@ -131,7 +131,7 @@ struct StringMap
 
     void remove(const char *key)
     {
-        uint64_t hash = StringMapHash(key);
+        uint64_t hash = egStringMapHash(key);
         uint64_t i = hash & (this->size - 1);
         uint64_t iters = 0;
 
@@ -187,13 +187,13 @@ struct StringMap
 };
 
 template <typename T>
-void StringMap<T>::grow()
+void EgStringMap<T>::grow()
 {
     uint64_t old_size = this->size;
     Slot *old_slots = this->slots;
 
     this->size = old_size * 2;
-    this->slots = (Slot*)Allocate(this->allocator, sizeof(*this->slots) * this->size);
+    this->slots = (Slot*)egAllocate(this->allocator, sizeof(*this->slots) * this->size);
     memset(this->slots, 0, sizeof(*this->slots) * this->size);
 
     for (uint64_t i = 0; i < old_size; i++)
@@ -204,5 +204,5 @@ void StringMap<T>::grow()
         }
     }
 
-    Free(this->allocator, this->slots);
+    egFree(this->allocator, this->slots);
 }

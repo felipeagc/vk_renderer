@@ -7,11 +7,11 @@
 extern "C" {
 #endif
 
-typedef struct Engine Engine;
+typedef struct EgEngine EgEngine;
 typedef struct RgImage RgImage;
 typedef struct RgCmdPool RgCmdPool;
 
-ImageHandle GenerateBRDFLUT(Engine *engine, RgCmdPool *cmd_pool, uint32_t dim);
+EgImage egGenerateBRDFLUT(EgEngine *engine, RgCmdPool *cmd_pool, uint32_t dim);
 
 #ifdef __cplusplus
 }

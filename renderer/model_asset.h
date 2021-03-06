@@ -8,31 +8,31 @@
 extern "C" {
 #endif
 
-typedef struct Allocator Allocator;
-typedef struct Engine Engine;
-typedef struct Mesh Mesh;
+typedef struct EgAllocator EgAllocator;
+typedef struct EgEngine EgEngine;
+typedef struct EgMesh EgMesh;
 typedef struct RgCmdBuffer RgCmdBuffer;
-typedef struct BufferPool BufferPool;
-typedef struct CameraUniform CameraUniform;
+typedef struct EgBufferPool EgBufferPool;
+typedef struct EgCameraUniform EgCameraUniform;
 
-typedef struct ModelManager ModelManager;
-typedef struct ModelAsset ModelAsset;
+typedef struct EgModelManager EgModelManager;
+typedef struct EgModelAsset EgModelAsset;
 
-ModelManager *ModelManagerCreate(
-		Allocator *allocator, Engine *engine, size_t model_limit, size_t material_limit);
-void ModelManagerDestroy(ModelManager *manager);
+EgModelManager *egModelManagerCreate(
+		EgAllocator *allocator, EgEngine *engine, size_t model_limit, size_t material_limit);
+void egModelManagerDestroy(EgModelManager *manager);
 
-void ModelManagerBeginFrame(ModelManager *manager, CameraUniform *camera_uniform);
+void egModelManagerBeginFrame(EgModelManager *manager, EgCameraUniform *camera_uniform);
 
-ModelAsset *ModelAssetFromGltf(
-        ModelManager *manager,
+EgModelAsset *egModelAssetFromGltf(
+        EgModelManager *manager,
         const uint8_t *data,
         size_t size);
-ModelAsset *ModelAssetFromMesh(
-        ModelManager *manager,
-        Mesh *mesh);
-void ModelAssetDestroy(ModelAsset *model);
-void ModelAssetRender(ModelAsset *model, RgCmdBuffer *cmd_buffer, float4x4 *transform);
+EgModelAsset *egModelAssetFromMesh(
+        EgModelManager *manager,
+        EgMesh *mesh);
+void egModelAssetDestroy(EgModelAsset *model);
+void egModelAssetRender(EgModelAsset *model, RgCmdBuffer *cmd_buffer, float4x4 *transform);
 
 #ifdef __cplusplus
 }

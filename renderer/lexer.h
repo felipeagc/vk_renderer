@@ -2,9 +2,9 @@
 
 #include <stddef.h>
 
-typedef struct Allocator Allocator;
+typedef struct EgAllocator EgAllocator;
 
-typedef enum TokenType
+typedef enum EgTokenType
 {
     TOKEN_ERROR = 0,
     TOKEN_LCURLY,
@@ -20,22 +20,22 @@ typedef enum TokenType
     TOKEN_IDENT,
     TOKEN_STRING,
     TOKEN_EOF,
-} TokenType;
+} EgTokenType;
 
-typedef struct Token
+typedef struct EgToken
 {
-    TokenType type;
+    EgTokenType type;
     size_t pos;
     const char *str;
-} Token;
+} EgToken;
 
-typedef struct TokenizerState
+typedef struct EgTokenizerState
 {
     const char *text;
     size_t length;
     size_t pos;
-} TokenizerState;
+} EgTokenizerState;
 
-TokenizerState NewTokenizerState(const char *text, size_t length);
-TokenizerState NextToken(Allocator *allocator, TokenizerState state, Token *token);
-void FreeToken(Allocator *allocator, Token token);
+EgTokenizerState egTokenizerCreate(const char *text, size_t length);
+EgTokenizerState egTokenizerNextToken(EgAllocator *allocator, EgTokenizerState state, EgToken *token);
+void egTokenizerFreeToken(EgAllocator *allocator, EgToken token);

@@ -1,24 +1,24 @@
 #pragma once
 
-#include <stdalign.h>
+#include "base.h"
 #include "math_types.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef struct Engine Engine;
+typedef struct EgEngine EgEngine;
 
-typedef struct alignas(16) CameraUniform
+typedef struct EgCameraUniform
 {
     float4 pos;
     float4x4 view;
     float4x4 proj;
-} CameraUniform;
+} EgCameraUniform;
 
-typedef struct FPSCamera
+typedef struct EgFPSCamera
 {
-    Engine *engine;
+    EgEngine *engine;
 
     float3 pos;
     float yaw;
@@ -29,10 +29,10 @@ typedef struct FPSCamera
     double prev_y;
     float sensitivity;
     float speed;
-} FPSCamera;
+} EgFPSCamera;
 
-void FPSCameraInit(FPSCamera *camera, Engine *engine);
-CameraUniform FPSCameraUpdate(FPSCamera *camera, float delta_time);
+void egFPSCameraInit(EgFPSCamera *camera, EgEngine *engine);
+EgCameraUniform egFPSCameraUpdate(EgFPSCamera *camera, float delta_time);
 
 #ifdef __cplusplus
 }

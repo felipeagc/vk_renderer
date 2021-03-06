@@ -6,31 +6,31 @@
 #include <cgltf.h>
 #include <stb_image.h>
 #include "math.h"
-#include "array.hpp"
+#include "array.h"
 #include "allocator.h"
 #include "engine.h"
 #include "mesh.h"
 #include "buffer_pool.h"
 #include "camera.h"
 
-struct ModelManager
+struct EgModelManager
 {
-    Allocator *allocator;
-    Engine *engine;
+    EgAllocator *allocator;
+    EgEngine *engine;
 
-    BufferPool *camera_buffer_pool;
-    BufferPool *model_buffer_pool;
-    BufferPool *material_buffer_pool;
+    EgBufferPool *camera_buffer_pool;
+    EgBufferPool *model_buffer_pool;
+    EgBufferPool *material_buffer_pool;
 
     uint32_t current_camera_index;
 };
 
-struct ModelUniform
+typedef struct ModelUniform
 {
     float4x4 transform;
-};
+} ModelUniform;
 
-struct MaterialUniform
+typedef struct MaterialUniform
 {
     float4 base_color;
     float4 emissive;
@@ -45,14 +45,14 @@ struct MaterialUniform
     uint32_t metallic_roughness_image_index;
     uint32_t occlusion_image_index;
     uint32_t emissive_image_index;
-};
+} MaterialUniform;
 
-enum ModelType {
+typedef enum ModelType {
     MODEL_FROM_MESH,
     MODEL_FROM_GLTF,
-};
+} ModelType;
 
-struct Material
+typedef struct Material
 {
     float4 base_color;
     float4 emissive;
@@ -61,135 +61,135 @@ struct Material
     float roughness;
     uint32_t is_normal_mapped;
 
-    SamplerHandle sampler;
+    EgSampler sampler;
 
-    ImageHandle albedo_image;
-    ImageHandle normal_image;
-    ImageHandle metallic_roughness_image;
-    ImageHandle occlusion_image;
-    ImageHandle emissive_image;
-};
+    EgImage albedo_image;
+    EgImage normal_image;
+    EgImage metallic_roughness_image;
+    EgImage occlusion_image;
+    EgImage emissive_image;
+} Material;
 
-struct Primitive
+typedef struct Primitive
 {
     uint32_t first_index;
     uint32_t index_count;
     uint32_t vertex_count;
-    int32_t material_index = -1;
+    int32_t material_index;
     bool has_indices;
     bool is_normal_mapped;
-};
+} Primitive;
 
-struct ModelMesh
+typedef struct ModelMesh
 {
-    Array<Primitive> primitives;
-};
+    EgArray(Primitive) primitives;
+} ModelMesh;
 
-struct Node
+typedef struct Node
 {
-    int64_t parent_index = -1;
-    Array<uint32_t> children_indices;
+    int64_t parent_index;
+    EgArray(size_t) children_indices;
 
-    float4x4 matrix = eg_float4x4_diagonal(1.0f);
-    float4x4 resolved_matrix = eg_float4x4_diagonal(1.0f);
-    int64_t mesh_index = -1;
+    float4x4 matrix;
+    float4x4 resolved_matrix;
+    int64_t mesh_index;
 
-    float3 translation = V3(0.0, 0.0, 0.0);
-    float3 scale = V3(1.0, 1.0, 1.0);
-    quat128 rotation = {0.0, 0.0, 0.0, 1.0};
-};
+    float3 translation;
+    float3 scale;
+    quat128 rotation;
+} Node;
 
-struct ModelAsset
+typedef struct EgModelAsset
 {
-    ModelManager *manager;
+    EgModelManager *manager;
 
     ModelType type;
 
     RgBuffer *vertex_buffer;
     RgBuffer *index_buffer;
 
-    Array<Node> nodes;
-    Array<size_t> root_nodes;
-    Array<ModelMesh> meshes;
-    Array<Material> materials;
-    Array<ImageHandle> images;
-    Array<SamplerHandle> samplers;
-};
+    EgArray(Node) nodes;
+    EgArray(size_t) root_nodes;
+    EgArray(ModelMesh) meshes;
+    EgArray(Material) materials;
+    EgArray(EgImage) images;
+    EgArray(EgSampler) samplers;
+} EgModelAsset;
 
 static float4x4 NodeLocalMatrix(Node *node)
 {
-    float4x4 result = eg_float4x4_diagonal(1.0f);
+    float4x4 result = egFloat4x4Diagonal(1.0f);
 
-    eg_float4x4_translate(&result, node->translation);
+    egFloat4x4Translate(&result, node->translation);
 
     float3 axis;
     float angle;
-    eg_quat_to_axis_angle(node->rotation, &axis, &angle);
-    eg_float4x4_rotate(&result, angle, axis);
+    egQuatToAxisAngle(node->rotation, &axis, &angle);
+    egFloat4x4Rotate(&result, angle, axis);
 
-    eg_float4x4_scale(&result, node->scale);
+    egFloat4x4Scale(&result, node->scale);
 
-    return eg_float4x4_mul(&result, &node->matrix);
+    return egFloat4x4Mul(&result, &node->matrix);
 }
 
-static float4x4 NodeResolveMatrix(Node *node, ModelAsset *model)
+static float4x4 NodeResolveMatrix(Node *node, EgModelAsset *model)
 {
     float4x4 m = NodeLocalMatrix(node);
     int32_t p = node->parent_index;
     while (p != -1)
     {
         float4x4 parent_local_mat = NodeLocalMatrix(&model->nodes[p]);
-        m = eg_float4x4_mul(&m, &parent_local_mat);
+        m = egFloat4x4Mul(&m, &parent_local_mat);
         p = model->nodes[p].parent_index;
     }
 
     return m;
 }
 
-extern "C" ModelManager *ModelManagerCreate(
-    Allocator *allocator, Engine *engine, size_t model_limit, size_t material_limit)
+EgModelManager *egModelManagerCreate(
+    EgAllocator *allocator, EgEngine *engine, size_t model_limit, size_t material_limit)
 {
-    ModelManager *manager = (ModelManager *)Allocate(allocator, sizeof(*manager));
-    *manager = {};
+    EgModelManager *manager = (EgModelManager *)egAllocate(allocator, sizeof(*manager));
+    *manager = (EgModelManager){};
 
     manager->allocator = allocator;
     manager->engine = engine;
     manager->camera_buffer_pool =
-        BufferPoolCreate(manager->allocator, engine, sizeof(CameraUniform), 16);
+        egBufferPoolCreate(manager->allocator, engine, sizeof(EgCameraUniform), 16);
     manager->model_buffer_pool =
-        BufferPoolCreate(manager->allocator, engine, sizeof(ModelUniform), model_limit);
-    manager->material_buffer_pool = BufferPoolCreate(
+        egBufferPoolCreate(manager->allocator, engine, sizeof(ModelUniform), model_limit);
+    manager->material_buffer_pool = egBufferPoolCreate(
         manager->allocator, engine, sizeof(MaterialUniform), material_limit);
 
     return manager;
 }
 
-extern "C" void ModelManagerDestroy(ModelManager *manager)
+void egModelManagerDestroy(EgModelManager *manager)
 {
-    BufferPoolDestroy(manager->camera_buffer_pool);
-    BufferPoolDestroy(manager->model_buffer_pool);
-    BufferPoolDestroy(manager->material_buffer_pool);
+    egBufferPoolDestroy(manager->camera_buffer_pool);
+    egBufferPoolDestroy(manager->model_buffer_pool);
+    egBufferPoolDestroy(manager->material_buffer_pool);
 
-    Free(manager->allocator, manager);
+    egFree(manager->allocator, manager);
 }
 
-extern "C" void
-ModelManagerBeginFrame(ModelManager *manager, CameraUniform *camera_uniform)
+void
+egModelManagerBeginFrame(EgModelManager *manager, EgCameraUniform *camera_uniform)
 {
-    BufferPoolReset(manager->camera_buffer_pool);
-    BufferPoolReset(manager->model_buffer_pool);
-    BufferPoolReset(manager->material_buffer_pool);
+    egBufferPoolReset(manager->camera_buffer_pool);
+    egBufferPoolReset(manager->model_buffer_pool);
+    egBufferPoolReset(manager->material_buffer_pool);
 
-    manager->current_camera_index = BufferPoolAllocateItem(
+    manager->current_camera_index = egBufferPoolAllocateItem(
         manager->camera_buffer_pool, sizeof(*camera_uniform), camera_uniform);
 }
 
-static Material MaterialDefault(Engine *engine)
+static Material MaterialDefault(EgEngine *engine)
 {
     Material material = {};
-    ImageHandle white_image = EngineGetWhiteImage(engine);
-    ImageHandle black_image = EngineGetBlackImage(engine);
-    SamplerHandle default_sampler = EngineGetDefaultSampler(engine);
+    EgImage white_image = egEngineGetWhiteImage(engine);
+    EgImage black_image = egEngineGetBlackImage(engine);
+    EgSampler default_sampler = egEngineGetDefaultSampler(engine);
 
     material.albedo_image = white_image;
     material.normal_image = white_image;
@@ -202,26 +202,26 @@ static Material MaterialDefault(Engine *engine)
     return material;
 }
 
-extern "C" ModelAsset *
-ModelAssetFromGltf(ModelManager *manager, const uint8_t *data, size_t size)
+EgModelAsset *
+egModelAssetFromGltf(EgModelManager *manager, const uint8_t *data, size_t size)
 {
-    Engine *engine = manager->engine;
-    Allocator *allocator = manager->allocator;
-    RgDevice *device = EngineGetDevice(engine);
-    RgCmdPool *transfer_cmd_pool = EngineGetTransferCmdPool(engine);
+    EgEngine *engine = manager->engine;
+    EgAllocator *allocator = manager->allocator;
+    RgDevice *device = egEngineGetDevice(engine);
+    RgCmdPool *transfer_cmd_pool = egEngineGetTransferCmdPool(engine);
 
-    ModelAsset *model = (ModelAsset *)Allocate(allocator, sizeof(ModelAsset));
-    *model = {};
+    EgModelAsset *model = (EgModelAsset *)egAllocate(allocator, sizeof(EgModelAsset));
+    *model = (EgModelAsset){};
 
     model->manager = manager;
     model->type = MODEL_FROM_GLTF;
 
-    model->nodes = Array<Node>::create(allocator);
-    model->root_nodes = Array<size_t>::create(allocator);
-    model->meshes = Array<ModelMesh>::create(allocator);
-    model->materials = Array<Material>::create(allocator);
-    model->images = Array<ImageHandle>::create(allocator);
-    model->samplers = Array<SamplerHandle>::create(allocator);
+    model->nodes = egArrayCreate(allocator, Node);
+    model->root_nodes = egArrayCreate(allocator, size_t);
+    model->meshes = egArrayCreate(allocator, ModelMesh);
+    model->materials = egArrayCreate(allocator, Material);
+    model->images = egArrayCreate(allocator, EgImage);
+    model->samplers = egArrayCreate(allocator, EgSampler);
 
     cgltf_options gltf_options = {};
     gltf_options.type = cgltf_file_type_glb;
@@ -240,7 +240,7 @@ ModelAssetFromGltf(ModelManager *manager, const uint8_t *data, size_t size)
         return NULL;
     }
 
-    model->images.resize(gltf_data->images_count);
+    egArrayResize(&model->images, gltf_data->images_count);
     for (uint32_t i = 0; i < gltf_data->images_count; ++i)
     {
         cgltf_image *gltf_image = &gltf_data->images[i];
@@ -272,20 +272,20 @@ ModelAssetFromGltf(ModelManager *manager, const uint8_t *data, size_t size)
 
             RgImageInfo image_info = {};
             image_info.format = RG_FORMAT_RGBA8_UNORM;
-            image_info.extent = {(uint32_t)width, (uint32_t)height, 1};
+            image_info.extent = (RgExtent3D){(uint32_t)width, (uint32_t)height, 1};
             image_info.aspect = RG_IMAGE_ASPECT_COLOR;
             image_info.layer_count = 1;
             image_info.sample_count = 1;
             image_info.mip_count = 1;
             image_info.usage = RG_IMAGE_USAGE_SAMPLED | RG_IMAGE_USAGE_TRANSFER_DST;
 
-            model->images[i] = EngineAllocateImageHandle(engine, &image_info);
+            model->images[i] = egEngineAllocateImage(engine, &image_info);
 
             RgImageCopy image_copy = {};
             image_copy.array_layer = 0;
             image_copy.image = model->images[i].image;
             image_copy.mip_level = 0;
-            image_copy.offset = RgOffset3D{0, 0, 0};
+            image_copy.offset = (RgOffset3D){0, 0, 0};
             rgImageUpload(
                 device,
                 transfer_cmd_pool,
@@ -304,7 +304,7 @@ ModelAssetFromGltf(ModelManager *manager, const uint8_t *data, size_t size)
         }
     }
 
-    model->samplers.resize(gltf_data->samplers_count);
+    egArrayResize(&model->samplers, gltf_data->samplers_count);
     for (uint32_t i = 0; i < gltf_data->samplers_count; ++i)
     {
         cgltf_sampler gltf_sampler = gltf_data->samplers[i];
@@ -333,10 +333,10 @@ ModelAssetFromGltf(ModelManager *manager, const uint8_t *data, size_t size)
         default: break;
         }
 
-        model->samplers[i] = EngineAllocateSamplerHandle(engine, &sampler_info);
+        model->samplers[i] = egEngineAllocateSampler(engine, &sampler_info);
     }
 
-    model->materials.resize(gltf_data->materials_count);
+    egArrayResize(&model->materials, gltf_data->materials_count);
 
     for (size_t i = 0; i < gltf_data->materials_count; ++i)
     {
@@ -346,7 +346,7 @@ ModelAssetFromGltf(ModelManager *manager, const uint8_t *data, size_t size)
         Material *mat = &model->materials[i];
         *mat = MaterialDefault(engine);
 
-        if (model->samplers.length > 0)
+        if (egArrayLength(model->samplers) > 0)
         {
             mat->sampler = model->samplers[0];
         }
@@ -391,21 +391,21 @@ ModelAssetFromGltf(ModelManager *manager, const uint8_t *data, size_t size)
         }
     }
 
-    Array<Vertex> vertices = Array<Vertex>::create(allocator);
-    Array<uint32_t> indices = Array<uint32_t>::create(allocator);
+    EgArray(EgVertex) vertices = egArrayCreate(allocator, EgVertex);
+    EgArray(uint32_t) indices = egArrayCreate(allocator, uint32_t);
 
-    model->meshes.resize(gltf_data->meshes_count);
+    egArrayResize(&model->meshes, gltf_data->meshes_count);
     for (size_t i = 0; i < gltf_data->meshes_count; ++i)
     {
-        Array<Primitive> primitives = Array<Primitive>::create(allocator);
+        EgArray(Primitive) primitives = egArrayCreate(allocator, Primitive);
 
         cgltf_mesh *gltf_mesh = &gltf_data->meshes[i];
         for (size_t j = 0; j < gltf_mesh->primitives_count; ++j)
         {
             cgltf_primitive *gltf_primitive = &gltf_mesh->primitives[j];
 
-            size_t index_start = indices.length;
-            size_t vertex_start = vertices.length;
+            size_t index_start = egArrayLength(indices);
+            size_t vertex_start = egArrayLength(vertices);
 
             size_t index_count = 0;
             size_t vertex_count = 0;
@@ -474,9 +474,9 @@ ModelAssetFromGltf(ModelManager *manager, const uint8_t *data, size_t size)
                 }
             }
 
-            vertices.resize(vertices.length + vertex_count);
+            egArrayResize(&vertices, egArrayLength(vertices) + vertex_count);
 
-            Vertex *new_vertices = &vertices[vertices.length - vertex_count];
+            EgVertex *new_vertices = &vertices[egArrayLength(vertices) - vertex_count];
 
             for (size_t k = 0; k < vertex_count; ++k)
             {
@@ -527,8 +527,8 @@ ModelAssetFromGltf(ModelManager *manager, const uint8_t *data, size_t size)
 
                 index_count = accessor->count;
 
-                indices.resize(indices.length + index_count);
-                uint32_t *new_indices = &indices[indices.length - index_count];
+                egArrayResize(&indices, egArrayLength(indices) + index_count);
+                uint32_t *new_indices = &indices[egArrayLength(indices) - index_count];
 
                 uint8_t *data_ptr =
                     ((uint8_t *)buffer->data) + accessor->offset + buffer_view->offset;
@@ -578,7 +578,7 @@ ModelAssetFromGltf(ModelManager *manager, const uint8_t *data, size_t size)
                     (size_t)(gltf_primitive->material - gltf_data->materials);
             }
 
-            primitives.push_back(new_primitive);
+            egArrayPush(&primitives, new_primitive);
         }
 
         model->meshes[i] = (ModelMesh){
@@ -586,8 +586,8 @@ ModelAssetFromGltf(ModelManager *manager, const uint8_t *data, size_t size)
         };
     }
 
-    size_t vertex_buffer_size = sizeof(Vertex) * vertices.length;
-    size_t index_buffer_size = sizeof(uint32_t) * indices.length;
+    size_t vertex_buffer_size = sizeof(EgVertex) * egArrayLength(vertices);
+    size_t index_buffer_size = sizeof(uint32_t) * egArrayLength(indices);
     EG_ASSERT(vertex_buffer_size > 0);
 
     RgBufferInfo vertex_buffer_info = {};
@@ -603,21 +603,11 @@ ModelAssetFromGltf(ModelManager *manager, const uint8_t *data, size_t size)
     model->index_buffer = rgBufferCreate(device, &index_buffer_info);
 
     rgBufferUpload(
-        device,
-        transfer_cmd_pool,
-        model->vertex_buffer,
-        0,
-        vertex_buffer_size,
-        &vertices[0]);
+        device, transfer_cmd_pool, model->vertex_buffer, 0, vertex_buffer_size, vertices);
     rgBufferUpload(
-        device,
-        transfer_cmd_pool,
-        model->index_buffer,
-        0,
-        index_buffer_size,
-        &indices[0]);
+        device, transfer_cmd_pool, model->index_buffer, 0, index_buffer_size, indices);
 
-    model->nodes.resize(gltf_data->nodes_count);
+    egArrayResize(&model->nodes, gltf_data->nodes_count);
     for (size_t i = 0; i < gltf_data->nodes_count; ++i)
     {
         cgltf_node *gltf_node = &gltf_data->nodes[i];
@@ -625,10 +615,10 @@ ModelAssetFromGltf(ModelManager *manager, const uint8_t *data, size_t size)
 
         *node = (Node){
             .parent_index = -1,
-            .children_indices = Array<uint32_t>::create(allocator),
+            .children_indices = egArrayCreate(allocator, size_t),
 
-            .matrix = eg_float4x4_diagonal(1.0f),
-            .resolved_matrix = eg_float4x4_diagonal(1.0f),
+            .matrix = egFloat4x4Diagonal(1.0f),
+            .resolved_matrix = egFloat4x4Diagonal(1.0f),
             .mesh_index = -1,
 
             .translation = V3(0.0, 0.0, 0.0),
@@ -677,90 +667,92 @@ ModelAssetFromGltf(ModelManager *manager, const uint8_t *data, size_t size)
     }
 
     // Add children / root nodes
-    for (size_t i = 0; i < model->nodes.length; ++i)
+    for (size_t i = 0; i < egArrayLength(model->nodes); ++i)
     {
         if (model->nodes[i].parent_index == -1)
         {
-            model->root_nodes.push_back(i);
+            egArrayPush(&model->root_nodes, i);
         }
         else
         {
-            model->nodes[model->nodes[i].parent_index].children_indices.push_back(i);
+            size_t parent_index = model->nodes[i].parent_index;
+            Node *parent = &model->nodes[parent_index];
+            egArrayPush(&parent->children_indices, i);
         }
     }
 
-    for (size_t i = 0; i < model->nodes.length; ++i)
+    for (size_t i = 0; i < egArrayLength(model->nodes); ++i)
     {
         model->nodes[i].resolved_matrix = NodeResolveMatrix(&model->nodes[i], model);
     }
 
-    indices.free();
-    vertices.free();
+    egArrayFree(&indices);
+    egArrayFree(&vertices);
 
     cgltf_free(gltf_data);
 
     return model;
 }
 
-extern "C" ModelAsset *ModelAssetFromMesh(ModelManager *manager, Mesh *mesh)
+EgModelAsset *egModelAssetFromMesh(EgModelManager *manager, EgMesh *mesh)
 {
-    Allocator *allocator = manager->allocator;
-    Engine *engine = manager->engine;
+    EgAllocator *allocator = manager->allocator;
+    EgEngine *engine = manager->engine;
 
-    ModelAsset *model = (ModelAsset *)Allocate(allocator, sizeof(ModelAsset));
-    *model = {};
+    EgModelAsset *model = (EgModelAsset *)egAllocate(allocator, sizeof(EgModelAsset));
+    *model = (EgModelAsset){};
 
     model->manager = manager;
     model->type = MODEL_FROM_MESH;
 
-    model->nodes = Array<Node>::create(allocator);
-    model->root_nodes = Array<size_t>::create(allocator);
-    model->meshes = Array<ModelMesh>::create(allocator);
-    model->materials = Array<Material>::create(allocator);
-    model->images = Array<ImageHandle>::create(allocator);
-    model->samplers = Array<SamplerHandle>::create(allocator);
+    model->nodes = egArrayCreate(allocator, Node);
+    model->root_nodes = egArrayCreate(allocator, size_t);
+    model->meshes = egArrayCreate(allocator, ModelMesh);
+    model->materials = egArrayCreate(allocator, Material);
+    model->images = egArrayCreate(allocator, EgImage);
+    model->samplers = egArrayCreate(allocator, EgSampler);
 
-    model->vertex_buffer = MeshGetVertexBuffer(mesh);
-    model->index_buffer = MeshGetIndexBuffer(mesh);
+    model->vertex_buffer = egMeshGetVertexBuffer(mesh);
+    model->index_buffer = egMeshGetIndexBuffer(mesh);
 
-    model->materials.push_back(MaterialDefault(engine));
+    egArrayPush(&model->materials, MaterialDefault(engine));
 
     Primitive primitive = {};
     primitive.first_index = 0;
-    primitive.index_count = MeshGetIndexCount(mesh);
+    primitive.index_count = egMeshGetIndexCount(mesh);
     primitive.material_index = 0;
     primitive.has_indices = true;
     primitive.is_normal_mapped = false;
 
     ModelMesh model_mesh = {};
-    model_mesh.primitives = Array<Primitive>::create(allocator);
-    model_mesh.primitives.push_back(primitive);
+    model_mesh.primitives = egArrayCreate(allocator, Primitive);
+    egArrayPush(&model_mesh.primitives, primitive);
 
-    model->meshes.push_back(model_mesh);
+    egArrayPush(&model->meshes, model_mesh);
 
     Node node = {};
-    node.matrix = eg_float4x4_diagonal(1.0f);
-    node.resolved_matrix = eg_float4x4_diagonal(1.0f);
+    node.matrix = egFloat4x4Diagonal(1.0f);
+    node.resolved_matrix = egFloat4x4Diagonal(1.0f);
     node.mesh_index = 0;
 
-    model->nodes.push_back(node);
+    egArrayPush(&model->nodes, node);
 
-    for (uint32_t i = 0; i < model->nodes.length; ++i)
+    for (size_t i = 0; i < egArrayLength(model->nodes); ++i)
     {
         Node *node = &model->nodes[i];
         if (node->parent_index == -1)
         {
-            model->root_nodes.push_back(i);
+            egArrayPush(&model->root_nodes, i);
         }
     }
 
     return model;
 }
 
-extern "C" void ModelAssetDestroy(ModelAsset *model)
+void egModelAssetDestroy(EgModelAsset *model)
 {
-    Engine *engine = model->manager->engine;
-    RgDevice *device = EngineGetDevice(engine);
+    EgEngine *engine = model->manager->engine;
+    RgDevice *device = egEngineGetDevice(engine);
 
     switch (model->type)
     {
@@ -768,14 +760,18 @@ extern "C" void ModelAssetDestroy(ModelAsset *model)
         break;
     }
     case MODEL_FROM_GLTF: {
-        for (SamplerHandle &sampler : model->samplers)
+        for (EgSampler *sampler = model->samplers;
+             sampler != model->samplers + egArrayLength(model->samplers);
+             ++sampler)
         {
-            EngineFreeSamplerHandle(engine, &sampler);
+            egEngineFreeSampler(engine, sampler);
         }
 
-        for (ImageHandle &image : model->images)
+        for (EgImage *image = model->images;
+             image != model->images + egArrayLength(model->images);
+             ++image)
         {
-            EngineFreeImageHandle(engine, &image);
+            egEngineFreeImage(engine, image);
         }
 
         rgBufferDestroy(device, model->vertex_buffer);
@@ -784,44 +780,49 @@ extern "C" void ModelAssetDestroy(ModelAsset *model)
     }
     }
 
-    for (Node &node : model->nodes)
+    for (Node *node = model->nodes; node != model->nodes + egArrayLength(model->nodes);
+         ++node)
     {
-        node.children_indices.free();
+        egArrayFree(&node->children_indices);
     }
 
-    for (ModelMesh &mesh : model->meshes)
+    for (ModelMesh *mesh = model->meshes;
+         mesh != model->meshes + egArrayLength(model->meshes);
+         ++mesh)
     {
-        mesh.primitives.free();
+        egArrayFree(&mesh->primitives);
     }
 
-    model->nodes.free();
-    model->root_nodes.free();
-    model->meshes.free();
-    model->materials.free();
-    model->images.free();
-    model->samplers.free();
+    egArrayFree(&model->nodes);
+    egArrayFree(&model->root_nodes);
+    egArrayFree(&model->meshes);
+    egArrayFree(&model->materials);
+    egArrayFree(&model->images);
+    egArrayFree(&model->samplers);
 
-    Free(model->manager->allocator, model);
+    egFree(model->manager->allocator, model);
 }
 
 static void
-NodeRender(ModelAsset *model, Node *node, RgCmdBuffer *cmd_buffer, float4x4 *transform)
+NodeRender(EgModelAsset *model, Node *node, RgCmdBuffer *cmd_buffer, float4x4 *transform)
 {
     (void)node;
     (void)cmd_buffer;
 
     ModelUniform model_uniform = {};
-    model_uniform.transform = eg_float4x4_mul(&node->resolved_matrix, transform);
+    model_uniform.transform = egFloat4x4Mul(&node->resolved_matrix, transform);
 
     if (node->mesh_index != -1)
     {
         ModelMesh *mesh = &model->meshes[node->mesh_index];
 
-        for (Primitive &primitive : mesh->primitives)
+        for (Primitive *primitive = mesh->primitives;
+             primitive != mesh->primitives + egArrayLength(mesh->primitives);
+             ++primitive)
         {
-            Material *material = &model->materials[primitive.material_index];
+            Material *material = &model->materials[primitive->material_index];
 
-            uint32_t model_index = BufferPoolAllocateItem(
+            uint32_t model_index = egBufferPoolAllocateItem(
                 model->manager->model_buffer_pool, sizeof(ModelUniform), &model_uniform);
 
             MaterialUniform material_uniform = {};
@@ -839,7 +840,7 @@ NodeRender(ModelAsset *model, Node *node, RgCmdBuffer *cmd_buffer, float4x4 *tra
             material_uniform.occlusion_image_index = material->occlusion_image.index;
             material_uniform.emissive_image_index = material->emissive_image.index;
 
-            uint32_t material_index = BufferPoolAllocateItem(
+            uint32_t material_index = egBufferPoolAllocateItem(
                 model->manager->material_buffer_pool,
                 sizeof(MaterialUniform),
                 &material_uniform);
@@ -857,46 +858,49 @@ NodeRender(ModelAsset *model, Node *node, RgCmdBuffer *cmd_buffer, float4x4 *tra
             } pc;
 
             pc.camera_buffer_index =
-                BufferPoolGetBufferIndex(model->manager->camera_buffer_pool);
+                egBufferPoolGetBufferIndex(model->manager->camera_buffer_pool);
             pc.camera_index = model->manager->current_camera_index;
 
             pc.model_buffer_index =
-                BufferPoolGetBufferIndex(model->manager->model_buffer_pool);
+                egBufferPoolGetBufferIndex(model->manager->model_buffer_pool);
             pc.model_index = model_index;
 
             pc.material_buffer_index =
-                BufferPoolGetBufferIndex(model->manager->material_buffer_pool);
+                egBufferPoolGetBufferIndex(model->manager->material_buffer_pool);
             pc.material_index = material_index;
 
             rgCmdPushConstants(cmd_buffer, 0, sizeof(pc), &pc);
 
-            if (primitive.has_indices)
+            if (primitive->has_indices)
             {
                 rgCmdDrawIndexed(
-                    cmd_buffer, primitive.index_count, 1, primitive.first_index, 0, 0);
+                    cmd_buffer, primitive->index_count, 1, primitive->first_index, 0, 0);
             }
             else
             {
-                rgCmdDraw(cmd_buffer, primitive.vertex_count, 1, 0, 0);
+                rgCmdDraw(cmd_buffer, primitive->vertex_count, 1, 0, 0);
             }
         }
     }
 
-    for (uint32_t &index : node->children_indices)
+    for (size_t *index = node->children_indices;
+         index != node->children_indices + egArrayLength(node->children_indices);
+         ++index)
     {
-        Node *child = &model->nodes[index];
+        Node *child = &model->nodes[*index];
         NodeRender(model, child, cmd_buffer, transform);
     }
 }
 
-extern "C" void
-ModelAssetRender(ModelAsset *model, RgCmdBuffer *cmd_buffer, float4x4 *transform)
+void
+egModelAssetRender(EgModelAsset *model, RgCmdBuffer *cmd_buffer, float4x4 *transform)
 {
     EG_ASSERT(transform);
     rgCmdBindVertexBuffer(cmd_buffer, model->vertex_buffer, 0);
     rgCmdBindIndexBuffer(cmd_buffer, model->index_buffer, 0, RG_INDEX_TYPE_UINT32);
-    for (Node &node : model->nodes)
+    for (Node *node = model->nodes; node != model->nodes + egArrayLength(model->nodes);
+         ++node)
     {
-        NodeRender(model, &node, cmd_buffer, transform);
+        NodeRender(model, node, cmd_buffer, transform);
     }
 }

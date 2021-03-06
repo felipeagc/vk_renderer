@@ -9,7 +9,7 @@
 #include "allocator.h"
 #include "engine.h"
 #include "math.h"
-#include "array.hpp"
+#include "array.h"
 
 enum {
     MAX_ATTRIBUTES = 16,
@@ -44,16 +44,13 @@ typedef struct ModuleInfo
 
 struct PipelineAsset
 {
-    Allocator *allocator;
-    Engine *engine;
+    EgAllocator *allocator;
+    EgEngine *engine;
     RgPipeline *pipeline;
 };
 
-static void AnalyzeSpirv(
-    RgShaderStage stage,
-    const uint32_t *code,
-    size_t code_size,
-    ModuleInfo *module);
+static void analyzeSpirv(
+    RgShaderStage stage, const uint32_t *code, size_t code_size, ModuleInfo *module);
 
 static bool isWhitespace(char c)
 {
@@ -65,46 +62,64 @@ static bool isWhitespaceOrNewLine(char c)
     return c == ' ' || c == '\r' || c == '\n' || c == '\t';
 }
 
-static bool stringToBool(const char *str, size_t len, bool *value) 
+static bool stringToBool(const char *str, size_t len, bool *value)
 {
-        if (strncmp(str, "true", len) == 0) *value = true;
-        else if (strncmp(str, "false", len) == 0) *value = false;
-        else return false;
-        return true;
+    if (strncmp(str, "true", len) == 0)
+        *value = true;
+    else if (strncmp(str, "false", len) == 0)
+        *value = false;
+    else
+        return false;
+    return true;
 }
 
 static bool stringToTopology(const char *str, size_t len, RgPrimitiveTopology *value)
 {
-    if (strncmp(str, "triangle_list", len) == 0) *value = RG_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    else if (strncmp(str, "line_list", len) == 0) *value = RG_PRIMITIVE_TOPOLOGY_LINE_LIST;
-    else return false;
+    if (strncmp(str, "triangle_list", len) == 0)
+        *value = RG_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    else if (strncmp(str, "line_list", len) == 0)
+        *value = RG_PRIMITIVE_TOPOLOGY_LINE_LIST;
+    else
+        return false;
     return true;
 }
 
 static bool stringToFrontFace(const char *str, size_t len, RgFrontFace *value)
 {
-    if (strncmp(str, "counter_clockwise", len) == 0) *value = RG_FRONT_FACE_COUNTER_CLOCKWISE;
-    else if (strncmp(str, "clockwise", len) == 0) *value = RG_FRONT_FACE_CLOCKWISE;
-    else return false;
+    if (strncmp(str, "counter_clockwise", len) == 0)
+        *value = RG_FRONT_FACE_COUNTER_CLOCKWISE;
+    else if (strncmp(str, "clockwise", len) == 0)
+        *value = RG_FRONT_FACE_CLOCKWISE;
+    else
+        return false;
     return true;
 }
 
-static bool stringToCullMode(const char *str, size_t len, RgCullMode * value)
+static bool stringToCullMode(const char *str, size_t len, RgCullMode *value)
 {
-    if (strncmp(str, "none", len) == 0) *value =  RG_CULL_MODE_NONE;
-    else if (strncmp(str, "front", len) == 0) *value =  RG_CULL_MODE_FRONT;
-    else if (strncmp(str, "back", len) == 0) *value =  RG_CULL_MODE_BACK;
-    else if (strncmp(str, "front_and_back", len) == 0) *value = RG_CULL_MODE_FRONT_AND_BACK;
-    else return false;
+    if (strncmp(str, "none", len) == 0)
+        *value = RG_CULL_MODE_NONE;
+    else if (strncmp(str, "front", len) == 0)
+        *value = RG_CULL_MODE_FRONT;
+    else if (strncmp(str, "back", len) == 0)
+        *value = RG_CULL_MODE_BACK;
+    else if (strncmp(str, "front_and_back", len) == 0)
+        *value = RG_CULL_MODE_FRONT_AND_BACK;
+    else
+        return false;
     return true;
 }
 
-static bool stringToPolygonMode(const char *str, size_t len, RgPolygonMode *value) 
+static bool stringToPolygonMode(const char *str, size_t len, RgPolygonMode *value)
 {
-    if (strncmp(str, "fill", len) == 0) *value = RG_POLYGON_MODE_FILL;
-    else if (strncmp(str, "line", len) == 0) *value = RG_POLYGON_MODE_LINE;
-    else if (strncmp(str, "point", len) == 0) *value = RG_POLYGON_MODE_POINT;
-    else return false;
+    if (strncmp(str, "fill", len) == 0)
+        *value = RG_POLYGON_MODE_FILL;
+    else if (strncmp(str, "line", len) == 0)
+        *value = RG_POLYGON_MODE_LINE;
+    else if (strncmp(str, "point", len) == 0)
+        *value = RG_POLYGON_MODE_POINT;
+    else
+        return false;
     return true;
 }
 
@@ -120,17 +135,19 @@ static bool stringToCompareOp(const char *str, size_t len, RgCompareOp *value)
         *value = RG_COMPARE_OP_GREATER_OR_EQUAL;
     if (strncmp(str, "always", len) == 0)
         *value = RG_COMPARE_OP_ALWAYS;
-    else return false;
+    else
+        return false;
     return true;
 }
 
-extern "C" RgPipeline *PipelineUtilCreateGraphicsPipeline(
-        Engine *engine,
-        Allocator *allocator,
-        RgPipelineLayout *pipeline_layout,
-        const char *hlsl, size_t hlsl_size)
+RgPipeline *egPipelineUtilCreateGraphicsPipeline(
+    EgEngine *engine,
+    EgAllocator *allocator,
+    RgPipelineLayout *pipeline_layout,
+    const char *hlsl,
+    size_t hlsl_size)
 {
-    RgDevice *device = EngineGetDevice(engine);
+    RgDevice *device = egEngineGetDevice(engine);
 
     uint8_t *vertex_code = NULL;
     size_t vertex_code_size = 0;
@@ -156,7 +173,7 @@ extern "C" RgPipeline *PipelineUtilCreateGraphicsPipeline(
         size_t spirv_size = 0;
         const uint8_t *spirv = tsCompilerOutputGetSpirv(output, &spirv_size);
 
-        vertex_code = (uint8_t*)Allocate(allocator, spirv_size);
+        vertex_code = (uint8_t *)egAllocate(allocator, spirv_size);
         memcpy(vertex_code, spirv, spirv_size);
         vertex_code_size = spirv_size;
 
@@ -188,7 +205,7 @@ extern "C" RgPipeline *PipelineUtilCreateGraphicsPipeline(
         size_t spirv_size = 0;
         const uint8_t *spirv = tsCompilerOutputGetSpirv(output, &spirv_size);
 
-        fragment_code = (uint8_t*)Allocate(allocator, spirv_size);
+        fragment_code = (uint8_t *)egAllocate(allocator, spirv_size);
         memcpy(fragment_code, spirv, spirv_size);
         fragment_code_size = spirv_size;
 
@@ -196,7 +213,7 @@ extern "C" RgPipeline *PipelineUtilCreateGraphicsPipeline(
         tsCompilerOptionsDestroy(options);
     }
 
-    RgGraphicsPipelineInfo pipeline_info = {};
+    RgGraphicsPipelineInfo pipeline_info = {0};
     pipeline_info.polygon_mode = RG_POLYGON_MODE_FILL;
     pipeline_info.cull_mode = RG_CULL_MODE_NONE;
     pipeline_info.front_face = RG_FRONT_FACE_CLOCKWISE;
@@ -221,19 +238,24 @@ extern "C" RgPipeline *PipelineUtilCreateGraphicsPipeline(
     for (size_t i = 0; i < hlsl_size; ++i)
     {
         size_t len = hlsl_size - i;
-        if (hlsl[i] == '#' && len > pragma_len && strncmp(&hlsl[i], pragma, pragma_len) == 0)
+        if (hlsl[i] == '#' && len > pragma_len &&
+            strncmp(&hlsl[i], pragma, pragma_len) == 0)
         {
             i += pragma_len;
-            while (isWhitespace(hlsl[i])) i++;
+            while (isWhitespace(hlsl[i]))
+                i++;
 
             size_t key_start = i;
-            while (!isWhitespaceOrNewLine(hlsl[i])) i++;
+            while (!isWhitespaceOrNewLine(hlsl[i]))
+                i++;
             size_t key_end = i;
 
-            while (isWhitespace(hlsl[i])) i++;
+            while (isWhitespace(hlsl[i]))
+                i++;
 
             size_t value_start = i;
-            while (!isWhitespaceOrNewLine(hlsl[i])) i++;
+            while (!isWhitespaceOrNewLine(hlsl[i]))
+                i++;
             size_t value_end = i;
 
             const char *key = &hlsl[key_start];
@@ -245,35 +267,36 @@ extern "C" RgPipeline *PipelineUtilCreateGraphicsPipeline(
             bool success = true;
             if (strncmp(key, "blend", key_len) == 0)
             {
-                 success = stringToBool(value, value_len, &pipeline_info.blend.enable);
+                success = stringToBool(value, value_len, &pipeline_info.blend.enable);
             }
             else if (strncmp(key, "depth_test", key_len) == 0)
             {
-                 success = stringToBool(
-                         value, value_len, &pipeline_info.depth_stencil.test_enable);
+                success = stringToBool(
+                    value, value_len, &pipeline_info.depth_stencil.test_enable);
             }
             else if (strncmp(key, "depth_write", key_len) == 0)
             {
-                 success = stringToBool(
-                         value, value_len, &pipeline_info.depth_stencil.write_enable);
+                success = stringToBool(
+                    value, value_len, &pipeline_info.depth_stencil.write_enable);
             }
             else if (strncmp(key, "depth_bias", key_len) == 0)
             {
                 success = stringToBool(
-                        value, value_len, &pipeline_info.depth_stencil.bias_enable);
+                    value, value_len, &pipeline_info.depth_stencil.bias_enable);
             }
             else if (strncmp(key, "depth_compare_op", key_len) == 0)
             {
                 success = stringToCompareOp(
-                        value, value_len, &pipeline_info.depth_stencil.compare_op);
+                    value, value_len, &pipeline_info.depth_stencil.compare_op);
             }
             else if (strncmp(key, "topology", key_len) == 0)
             {
-                 success = stringToTopology(value, value_len, &pipeline_info.topology);
+                success = stringToTopology(value, value_len, &pipeline_info.topology);
             }
             else if (strncmp(key, "polygon_mode", key_len) == 0)
             {
-                success = stringToPolygonMode(value, value_len, &pipeline_info.polygon_mode);
+                success =
+                    stringToPolygonMode(value, value_len, &pipeline_info.polygon_mode);
             }
             else if (strncmp(key, "cull_mode", key_len) == 0)
             {
@@ -290,14 +313,19 @@ extern "C" RgPipeline *PipelineUtilCreateGraphicsPipeline(
 
             if (!success)
             {
-                fprintf(stderr, "Warning: invalid pipeline parameter: '%.*s': '%.*s'\n",
-                        (int)key_len, key, (int)value_len, value);
+                fprintf(
+                    stderr,
+                    "Warning: invalid pipeline parameter: '%.*s': '%.*s'\n",
+                    (int)key_len,
+                    key,
+                    (int)value_len,
+                    value);
             }
         }
     }
 
-    ModuleInfo vertex_module = {};
-    AnalyzeSpirv(
+    ModuleInfo vertex_module = {0};
+    analyzeSpirv(
         RG_SHADER_STAGE_VERTEX,
         (uint32_t *)vertex_code,
         vertex_code_size / 4,
@@ -311,17 +339,14 @@ extern "C" RgPipeline *PipelineUtilCreateGraphicsPipeline(
 
     RgPipeline *pipeline = rgGraphicsPipelineCreate(device, &pipeline_info);
 
-    Free(allocator, vertex_code);
-    Free(allocator, fragment_code);
+    egFree(allocator, vertex_code);
+    egFree(allocator, fragment_code);
 
     return pipeline;
 }
 
-static void AnalyzeSpirv(
-    RgShaderStage stage,
-    const uint32_t *code,
-    size_t code_size,
-    ModuleInfo *module)
+static void analyzeSpirv(
+    RgShaderStage stage, const uint32_t *code, size_t code_size, ModuleInfo *module)
 {
     memset(module, 0, sizeof(*module));
 
@@ -330,7 +355,7 @@ static void AnalyzeSpirv(
     module->stage = stage;
 
     uint32_t id_bound = code[3];
-    Id *ids = (Id*)malloc(sizeof(Id) * id_bound);
+    Id *ids = (Id *)malloc(sizeof(Id) * id_bound);
     memset(ids, 0, sizeof(*ids) * id_bound);
 
     const uint32_t *inst = code + 5;
@@ -457,7 +482,8 @@ static void AnalyzeSpirv(
                         uint32_t vector_width = pointed_type->vector_width;
                         Id *elem_type = &ids[pointed_type->subtype_id];
 
-                        if (elem_type->opcode == SpvOpTypeFloat && elem_type->type_size == 32)
+                        if (elem_type->opcode == SpvOpTypeFloat &&
+                            elem_type->type_size == 32)
                         {
                             switch (vector_width)
                             {
@@ -473,7 +499,8 @@ static void AnalyzeSpirv(
                             EG_ASSERT(0);
                         }
 
-                        module->vertex_stride += (vector_width * (elem_type->type_size / 8));
+                        module->vertex_stride +=
+                            (vector_width * (elem_type->type_size / 8));
                     }
                     else if (pointed_type->opcode == SpvOpTypeInt)
                     {

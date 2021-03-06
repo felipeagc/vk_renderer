@@ -6,10 +6,10 @@
 #include <renderer/allocator.h>
 #include <renderer/model_asset.h>
 
-struct App
+typedef struct App
 {
-    Engine *engine;
-    ImageHandle offscreen_image;
+    EgEngine *engine;
+    EgImage offscreen_image;
     RgImage *offscreen_depth_image;
     RgRenderPass *offscreen_pass;
 
@@ -20,17 +20,17 @@ struct App
     double last_time;
     double delta_time;
 
-    SamplerHandle sampler;
+    EgSampler sampler;
 
     RgPipeline *offscreen_pipeline;
     RgPipeline *backbuffer_pipeline;
 
-    ModelManager *model_manager;
-    FPSCamera camera;
-    ModelAsset *model_asset;
-    Mesh *cube_mesh;
-    ModelAsset *gltf_asset;
-};
+    EgModelManager *model_manager;
+    EgFPSCamera camera;
+    EgModelAsset *model_asset;
+    EgMesh *cube_mesh;
+    EgModelAsset *gltf_asset;
+} App;
 
 App *AppCreate();
 void AppDestroy(App *app);
@@ -40,11 +40,12 @@ void AppRun(App *app);
 
 App *AppCreate()
 {
-    App *app = new App();
+    App *app = egAllocate(NULL, sizeof(App));
+    *app = (App){};
 
-    app->engine = EngineCreate(NULL);
+    app->engine = egEngineCreate(NULL);
 
-    RgDevice *device = EngineGetDevice(app->engine);
+    RgDevice *device = egEngineGetDevice(app->engine);
 
     //
     // Create sampler
@@ -59,40 +60,40 @@ App *AppCreate()
         .address_mode = RG_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT,
         .border_color = RG_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK,
     };
-    app->sampler = EngineAllocateSamplerHandle(app->engine, &sampler_info);
+    app->sampler = egEngineAllocateSampler(app->engine, &sampler_info);
 
     //
     // Offscreen pipeline
     //
     app->offscreen_pipeline =
-        EngineCreateGraphicsPipeline(app->engine, "../shaders/color.hlsl");
+        egEngineCreateGraphicsPipeline(app->engine, "../shaders/color.hlsl");
     EG_ASSERT(app->offscreen_pipeline);
 
     //
     // Backbuffer pipeline
     //
     app->backbuffer_pipeline =
-        EngineCreateGraphicsPipeline(app->engine, "../shaders/post.hlsl");
+        egEngineCreateGraphicsPipeline(app->engine, "../shaders/post.hlsl");
     EG_ASSERT(app->backbuffer_pipeline);
 
     app->cmd_pool = rgCmdPoolCreate(device, RG_QUEUE_TYPE_GRAPHICS);
     app->cmd_buffers[0] = rgCmdBufferCreate(device, app->cmd_pool);
     app->cmd_buffers[1] = rgCmdBufferCreate(device, app->cmd_pool);
 
-    FPSCameraInit(&app->camera, app->engine);
+    egFPSCameraInit(&app->camera, app->engine);
 
-    app->model_manager = ModelManagerCreate(NULL, app->engine, 256, 256);
-    app->cube_mesh = MeshCreateUVSphere(NULL, app->engine, app->cmd_pool, 1.0f, 16);
-    app->last_time = EngineGetTime(app->engine);
+    app->model_manager = egModelManagerCreate(NULL, app->engine, 256, 256);
+    app->cube_mesh = egMeshCreateUVSphere(NULL, app->engine, app->cmd_pool, 1.0f, 16);
+    app->last_time = egEngineGetTime(app->engine);
 
-    app->model_asset = ModelAssetFromMesh(app->model_manager, app->cube_mesh);
+    app->model_asset = egModelAssetFromMesh(app->model_manager, app->cube_mesh);
 
     size_t gltf_data_size = 0;
-    uint8_t *gltf_data = EngineLoadFileRelative(
+    uint8_t *gltf_data = egEngineLoadFileRelative(
         app->engine, NULL, "../assets/helmet.glb", &gltf_data_size);
     EG_ASSERT(gltf_data);
-    app->gltf_asset = ModelAssetFromGltf(app->model_manager, gltf_data, gltf_data_size);
-    Free(NULL, gltf_data);
+    app->gltf_asset = egModelAssetFromGltf(app->model_manager, gltf_data, gltf_data_size);
+    egFree(NULL, gltf_data);
 
     AppResize(app);
 
@@ -101,19 +102,19 @@ App *AppCreate()
 
 void AppDestroy(App *app)
 {
-    RgDevice *device = EngineGetDevice(app->engine);
+    RgDevice *device = egEngineGetDevice(app->engine);
 
-    ModelAssetDestroy(app->gltf_asset);
-    ModelAssetDestroy(app->model_asset);
-    MeshDestroy(app->cube_mesh);
-    ModelManagerDestroy(app->model_manager);
+    egModelAssetDestroy(app->gltf_asset);
+    egModelAssetDestroy(app->model_asset);
+    egMeshDestroy(app->cube_mesh);
+    egModelManagerDestroy(app->model_manager);
 
     rgPipelineDestroy(device, app->offscreen_pipeline);
     rgPipelineDestroy(device, app->backbuffer_pipeline);
 
-    EngineFreeSamplerHandle(app->engine, &app->sampler);
+    egEngineFreeSampler(app->engine, &app->sampler);
 
-    EngineFreeImageHandle(app->engine, &app->offscreen_image);
+    egEngineFreeImage(app->engine, &app->offscreen_image);
     rgImageDestroy(device, app->offscreen_depth_image);
     rgRenderPassDestroy(device, app->offscreen_pass);
 
@@ -121,17 +122,17 @@ void AppDestroy(App *app)
     rgCmdBufferDestroy(device, app->cmd_pool, app->cmd_buffers[1]);
     rgCmdPoolDestroy(device, app->cmd_pool);
 
-    EngineDestroy(app->engine);
+    egEngineDestroy(app->engine);
 
-    delete app;
+    egFree(NULL, app);
 }
 
 void AppResize(App *app)
 {
-    RgDevice *device = EngineGetDevice(app->engine);
+    RgDevice *device = egEngineGetDevice(app->engine);
 
     uint32_t width, height;
-    EngineGetWindowSize(app->engine, &width, &height);
+    egEngineGetWindowSize(app->engine, &width, &height);
 
     if (app->offscreen_pass)
     {
@@ -139,7 +140,7 @@ void AppResize(App *app)
     }
     if (app->offscreen_image.image)
     {
-        EngineFreeImageHandle(app->engine, &app->offscreen_image);
+        egEngineFreeImage(app->engine, &app->offscreen_image);
     }
     if (app->offscreen_depth_image)
     {
@@ -155,7 +156,7 @@ void AppResize(App *app)
         .mip_count = 1,
         .layer_count = 1,
     };
-    app->offscreen_image = EngineAllocateImageHandle(app->engine, &offscreen_image_info);
+    app->offscreen_image = egEngineAllocateImage(app->engine, &offscreen_image_info);
 
     RgImageInfo offscreen_depth_image_info = {
         .extent = {width, height, 1},
@@ -179,9 +180,9 @@ void AppResize(App *app)
 
 void AppRenderFrame(App *app)
 {
-    CameraUniform camera_uniform = FPSCameraUpdate(&app->camera, (float)app->delta_time);
+    EgCameraUniform camera_uniform = egFPSCameraUpdate(&app->camera, (float)app->delta_time);
 
-    RgSwapchain *swapchain = EngineGetSwapchain(app->engine);
+    RgSwapchain *swapchain = egEngineGetSwapchain(app->engine);
     RgCmdBuffer *cmd_buffer = app->cmd_buffers[app->current_frame];
     RgRenderPass *offscreen_pass = app->offscreen_pass;
     RgRenderPass *backbuffer_pass = rgSwapchainGetRenderPass(swapchain);
@@ -193,43 +194,43 @@ void AppRenderFrame(App *app)
     // Offscreen pass
 
     RgClearValue offscreen_clear_values[2];
-    offscreen_clear_values[0].color = {{0.0, 0.0, 0.0, 1.0}};
-    offscreen_clear_values[1].depth_stencil = {0.0f, 0};
+    offscreen_clear_values[0].color = (RgClearColorValue){{0.0, 0.0, 0.0, 1.0}};
+    offscreen_clear_values[1].depth_stencil = (RgClearDepthStencilValue){0.0f, 0};
     rgCmdSetRenderPass(cmd_buffer, offscreen_pass, 2, offscreen_clear_values);
 
     rgCmdBindPipeline(cmd_buffer, app->offscreen_pipeline);
     rgCmdBindDescriptorSet(
-        cmd_buffer, 0, EngineGetGlobalDescriptorSet(app->engine), 0, NULL);
+        cmd_buffer, 0, egEngineGetGlobalDescriptorSet(app->engine), 0, NULL);
 
-    ModelManagerBeginFrame(app->model_manager, &camera_uniform);
+    egModelManagerBeginFrame(app->model_manager, &camera_uniform);
 
     {
-        float4x4 transform = eg_float4x4_diagonal(1.0f);
-        eg_float4x4_translate(&transform, V3(-2.0, 0.0, -2.0));
-        ModelAssetRender(app->model_asset, cmd_buffer, &transform);
+        float4x4 transform = egFloat4x4Diagonal(1.0f);
+        egFloat4x4Translate(&transform, V3(-2.0, 0.0, -2.0));
+        egModelAssetRender(app->model_asset, cmd_buffer, &transform);
     }
 
     {
-        float4x4 transform = eg_float4x4_diagonal(1.0f);
-        eg_float4x4_translate(&transform, V3(0.0, 0.0, -2.0));
-        ModelAssetRender(app->model_asset, cmd_buffer, &transform);
+        float4x4 transform = egFloat4x4Diagonal(1.0f);
+        egFloat4x4Translate(&transform, V3(0.0, 0.0, -2.0));
+        egModelAssetRender(app->model_asset, cmd_buffer, &transform);
     }
 
     {
-        float4x4 transform = eg_float4x4_diagonal(1.0f);
-        eg_float4x4_translate(&transform, V3(2.0, 0.0, -2.0));
-        ModelAssetRender(app->gltf_asset, cmd_buffer, &transform);
+        float4x4 transform = egFloat4x4Diagonal(1.0f);
+        egFloat4x4Translate(&transform, V3(2.0, 0.0, -2.0));
+        egModelAssetRender(app->gltf_asset, cmd_buffer, &transform);
     }
 
     // Backbuffer pass
 
     RgClearValue backbuffer_clear_values[1];
-    backbuffer_clear_values[0].color = {{0.0, 0.0, 0.0, 1.0}};
+    backbuffer_clear_values[0].color = (RgClearColorValue){{0.0, 0.0, 0.0, 1.0}};
     rgCmdSetRenderPass(cmd_buffer, backbuffer_pass, 1, backbuffer_clear_values);
 
     rgCmdBindPipeline(cmd_buffer, app->backbuffer_pipeline);
     rgCmdBindDescriptorSet(
-        cmd_buffer, 0, EngineGetGlobalDescriptorSet(app->engine), 0, NULL);
+        cmd_buffer, 0, egEngineGetGlobalDescriptorSet(app->engine), 0, NULL);
 
     struct
     {
@@ -255,16 +256,16 @@ void AppRenderFrame(App *app)
 
 void AppRun(App *app)
 {
-    while (!EngineShouldClose(app->engine))
+    while (!egEngineShouldClose(app->engine))
     {
-        EnginePollEvents(app->engine);
+        egEnginePollEvents(app->engine);
 
-        double now = EngineGetTime(app->engine);
+        double now = egEngineGetTime(app->engine);
         app->delta_time = now - app->last_time;
         app->last_time = now;
 
-        Event event = {};
-        while (EngineNextEvent(app->engine, &event))
+        EgEvent event = {};
+        while (egEngineNextEvent(app->engine, &event))
         {
             switch (event.type)
             {
@@ -273,10 +274,10 @@ void AppRun(App *app)
                 break;
             }
             case EVENT_KEY_PRESSED: {
-                if (event.keyboard.key == KEY_ESCAPE)
+                if (event.keyboard.key == EG_KEY_ESCAPE)
                 {
-                    EngineSetCursorEnabled(
-                        app->engine, !EngineGetCursorEnabled(app->engine));
+                    egEngineSetCursorEnabled(
+                        app->engine, !egEngineGetCursorEnabled(app->engine));
                 }
                 break;
             }

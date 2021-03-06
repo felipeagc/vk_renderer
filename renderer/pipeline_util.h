@@ -3,8 +3,8 @@
 #include <stdint.h>
 #include <stddef.h>
 
-typedef struct Engine Engine;
-typedef struct Allocator Allocator;
+typedef struct EgEngine EgEngine;
+typedef struct EgAllocator EgAllocator;
 typedef struct RgPipeline RgPipeline;
 typedef struct RgPipelineLayout RgPipelineLayout;
 
@@ -12,9 +12,9 @@ typedef struct RgPipelineLayout RgPipelineLayout;
 extern "C" {
 #endif
 
-RgPipeline *PipelineUtilCreateGraphicsPipeline(
-        Engine *engine,
-        Allocator *allocator,
+RgPipeline *egPipelineUtilCreateGraphicsPipeline(
+        EgEngine *engine,
+        EgAllocator *allocator,
         RgPipelineLayout *pipeline_layout,
         const char *hlsl, size_t hlsl_size);
 

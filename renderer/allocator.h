@@ -6,27 +6,27 @@
 extern "C" {
 #endif
 
-typedef struct Allocator Allocator;
+typedef struct EgAllocator EgAllocator;
 
-struct Allocator
+struct EgAllocator
 {
-    void *(*allocate)(Allocator *allocator, size_t size);
-    void *(*reallocate)(Allocator *allocator, void *ptr, size_t size);
-    void (*free)(Allocator *allocator, void *ptr);
+    void *(*allocate)(EgAllocator *allocator, size_t size);
+    void *(*reallocate)(EgAllocator *allocator, void *ptr, size_t size);
+    void (*free)(EgAllocator *allocator, void *ptr);
 };
 
-void *Allocate(Allocator *allocator, size_t size);
-void *Reallocate(Allocator *allocator, void *ptr, size_t size);
-void Free(Allocator *allocator, void *ptr);
+void *egAllocate(EgAllocator *allocator, size_t size);
+void *egReallocate(EgAllocator *allocator, void *ptr, size_t size);
+void egFree(EgAllocator *allocator, void *ptr);
 
-typedef struct Arena Arena;
+typedef struct EgArena EgArena;
 
-Arena *ArenaCreate(Allocator *parent_allocator, size_t default_size);
-Allocator *ArenaGetAllocator(Arena *arena);
-void ArenaDestroy(Arena *arena);
+EgArena *egArenaCreate(EgAllocator *parent_allocator, size_t default_size);
+EgAllocator *egArenaGetAllocator(EgArena *arena);
+void egArenaDestroy(EgArena *arena);
 
-const char *Strdup(Allocator *allocator, const char *str);
-const char *NullTerminate(Allocator *allocator, const char *str, size_t length);
+const char *egStrdup(EgAllocator *allocator, const char *str);
+const char *egNullTerminate(EgAllocator *allocator, const char *str, size_t length);
 
 #ifdef __cplusplus
 }

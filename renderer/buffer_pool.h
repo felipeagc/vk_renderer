@@ -6,19 +6,19 @@
 extern "C" {
 #endif
 
-typedef struct Allocator Allocator;
-typedef struct Engine Engine;
-typedef struct BufferPool BufferPool;
+typedef struct EgAllocator EgAllocator;
+typedef struct EgEngine EgEngine;
+typedef struct EgBufferPool EgBufferPool;
 
-BufferPool *BufferPoolCreate(Allocator *allocator, Engine *engine, size_t item_size, size_t item_count);
-void BufferPoolDestroy(BufferPool *pool);
+EgBufferPool *egBufferPoolCreate(EgAllocator *allocator, EgEngine *engine, size_t item_size, size_t item_count);
+void egBufferPoolDestroy(EgBufferPool *pool);
 
-uint32_t BufferPoolGetBufferIndex(BufferPool *pool);
+uint32_t egBufferPoolGetBufferIndex(EgBufferPool *pool);
 
-void BufferPoolReset(BufferPool *pool);
+void egBufferPoolReset(EgBufferPool *pool);
 
 // Returns the item index in the buffer
-uint32_t BufferPoolAllocateItem(BufferPool *pool, size_t size, void *data);
+uint32_t egBufferPoolAllocateItem(EgBufferPool *pool, size_t size, void *data);
 
 
 #ifdef __cplusplus

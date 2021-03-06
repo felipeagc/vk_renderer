@@ -3,25 +3,26 @@
 #include "math.h"
 #include "allocator.h"
 #include "engine.h"
-#include "array.hpp"
+#include "array.h"
 
-struct Mesh
+struct EgMesh
 {
-    Allocator *allocator;
-    Engine *engine;
+    EgAllocator *allocator;
+    EgEngine *engine;
     RgBuffer *vertex_buffer;
     RgBuffer *index_buffer;
     uint32_t index_count;
 };
 
-Mesh *MeshCreateCube(Allocator *allocator, Engine *engine, RgCmdPool *cmd_pool)
+EgMesh *egMeshCreateCube(EgAllocator *allocator, EgEngine *engine, RgCmdPool *cmd_pool)
 {
-    Mesh *mesh = (Mesh*)Allocate(allocator, sizeof(Mesh));
-    *mesh = {};
+    EgMesh *mesh = (EgMesh*)egAllocate(allocator, sizeof(EgMesh));
+    *mesh = (EgMesh){0};
+
     mesh->allocator = allocator;
     mesh->engine = engine;
 
-    Vertex vertices[8] = {
+    EgVertex vertices[8] = {
         {V3( 0.5, 0.5,  0.5), {}, {}, {}},
         {V3(-0.5, 0.5,  0.5), {}, {}, {}},
         {V3(-0.5, 0.5, -0.5), {}, {}, {}},
@@ -63,7 +64,7 @@ Mesh *MeshCreateCube(Allocator *allocator, Engine *engine, RgCmdPool *cmd_pool)
     index_buffer_info.usage = RG_BUFFER_USAGE_INDEX | RG_BUFFER_USAGE_TRANSFER_DST;
     index_buffer_info.memory = RG_BUFFER_MEMORY_DEVICE;
 
-    RgDevice *device = EngineGetDevice(engine);
+    RgDevice *device = egEngineGetDevice(engine);
 
     mesh->vertex_buffer = rgBufferCreate(device, &vertex_buffer_info);
     mesh->index_buffer = rgBufferCreate(device, &index_buffer_info);
@@ -76,20 +77,20 @@ Mesh *MeshCreateCube(Allocator *allocator, Engine *engine, RgCmdPool *cmd_pool)
     return mesh;
 }
 
-Mesh *MeshCreateUVSphere(
-        Allocator *allocator,
-        Engine *engine,
+EgMesh *egMeshCreateUVSphere(
+        EgAllocator *allocator,
+        EgEngine *engine,
         RgCmdPool *cmd_pool,
         float radius,
         uint32_t divisions)
 {
-    Mesh *mesh = (Mesh*)Allocate(allocator, sizeof(Mesh));
-    *mesh = {};
+    EgMesh *mesh = (EgMesh*)egAllocate(allocator, sizeof(EgMesh));
+    *mesh = (EgMesh){0};
     mesh->allocator = allocator;
     mesh->engine = engine;
 
-    Array<Vertex> vertices = Array<Vertex>::create(allocator);
-    Array<uint32_t> indices = Array<uint32_t>::create(allocator);
+    EgArray(EgVertex) vertices = egArrayCreate(allocator, EgVertex);
+    EgArray(uint32_t) indices = egArrayCreate(allocator, uint32_t);
 
     float step = 1.0f / (float)divisions;
     float3 step3 = V3(step, step, step);
@@ -134,14 +135,16 @@ Mesh *MeshCreateUVSphere(
                 {
                     float3 iv = V3((float)i, (float)i, (float)i);
 
-                    float3 ivright = eg_float3_mul(iv, right);
-                    float3 jvup = eg_float3_mul(jv, up);
-                    float3 sum = eg_float3_add(ivright, jvup);
+                    float3 ivright = egFloat3Mul(iv, right);
+                    float3 jvup = egFloat3Mul(jv, up);
+                    float3 sum = egFloat3Add(ivright, jvup);
 
-                    float3 p = eg_float3_add(origin, eg_float3_mul(step3, sum));
-                    p = eg_float3_mul_scalar(eg_float3_normalize(p), radius);
+                    float3 p = egFloat3Add(origin, egFloat3Mul(step3, sum));
+                    p = egFloat3MulScalar(egFloat3Normalize(p), radius);
 
-                    vertices.push_back(Vertex{p, {}, {}, {}});
+
+                    EgVertex vertex = {p, {}, {}, {}};
+                    egArrayPush(&vertices, vertex);
                 }
             }
         }
@@ -165,29 +168,29 @@ Mesh *MeshCreateUVSphere(
                     uint32_t d = (face * k + j + 1) * k + i + 1;
                     if ((bottom ^ left) != 0)
                     {
-                        indices.push_back(a);
-                        indices.push_back(c);
-                        indices.push_back(b);
-                        indices.push_back(c);
-                        indices.push_back(d);
-                        indices.push_back(b);
+                        egArrayPush(&indices, a);
+                        egArrayPush(&indices, c);
+                        egArrayPush(&indices, b);
+                        egArrayPush(&indices, c);
+                        egArrayPush(&indices, d);
+                        egArrayPush(&indices, b);
                     }
                     else
                     {
-                        indices.push_back(a);
-                        indices.push_back(c);
-                        indices.push_back(d);
-                        indices.push_back(a);
-                        indices.push_back(d);
-                        indices.push_back(b);
+                        egArrayPush(&indices, a);
+                        egArrayPush(&indices, c);
+                        egArrayPush(&indices, d);
+                        egArrayPush(&indices, a);
+                        egArrayPush(&indices, d);
+                        egArrayPush(&indices, b);
                     }
                 }
             }
         }
     }
 
-    size_t vertices_size = vertices.length * sizeof(Vertex);
-    size_t indices_size = indices.length * sizeof(uint32_t);
+    size_t vertices_size = egArrayLength(vertices) * sizeof(EgVertex);
+    size_t indices_size = egArrayLength(indices) * sizeof(uint32_t);
 
     RgBufferInfo vertex_buffer_info = {};
     vertex_buffer_info.size = vertices_size;
@@ -199,42 +202,42 @@ Mesh *MeshCreateUVSphere(
     index_buffer_info.usage = RG_BUFFER_USAGE_INDEX | RG_BUFFER_USAGE_TRANSFER_DST;
     index_buffer_info.memory = RG_BUFFER_MEMORY_DEVICE;
 
-    RgDevice *device = EngineGetDevice(mesh->engine);
+    RgDevice *device = egEngineGetDevice(mesh->engine);
 
     mesh->vertex_buffer = rgBufferCreate(device, &vertex_buffer_info);
     mesh->index_buffer = rgBufferCreate(device, &index_buffer_info);
 
-    rgBufferUpload(device, cmd_pool, mesh->vertex_buffer, 0, vertices_size, vertices.ptr);
-    rgBufferUpload(device, cmd_pool, mesh->index_buffer, 0, indices_size, indices.ptr);
+    rgBufferUpload(device, cmd_pool, mesh->vertex_buffer, 0, vertices_size, vertices);
+    rgBufferUpload(device, cmd_pool, mesh->index_buffer, 0, indices_size, indices);
 
-    mesh->index_count = (uint32_t)indices.length;
+    mesh->index_count = (uint32_t)egArrayLength(indices);
 
-    indices.free();
-    vertices.free();
+    egArrayFree(&indices);
+    egArrayFree(&vertices);
     return mesh;
 }
 
-void MeshDestroy(Mesh *mesh)
+void egMeshDestroy(EgMesh *mesh)
 {
-    RgDevice *device = EngineGetDevice(mesh->engine);
+    RgDevice *device = egEngineGetDevice(mesh->engine);
 
     rgBufferDestroy(device, mesh->vertex_buffer);
     rgBufferDestroy(device, mesh->index_buffer);
 
-    Free(mesh->allocator, mesh);
+    egFree(mesh->allocator, mesh);
 }
 
-RgBuffer *MeshGetVertexBuffer(Mesh* mesh)
+RgBuffer *egMeshGetVertexBuffer(EgMesh* mesh)
 {
     return mesh->vertex_buffer;
 }
 
-RgBuffer *MeshGetIndexBuffer(Mesh* mesh)
+RgBuffer *egMeshGetIndexBuffer(EgMesh* mesh)
 {
     return mesh->index_buffer;
 }
 
-uint32_t MeshGetIndexCount(Mesh* mesh)
+uint32_t egMeshGetIndexCount(EgMesh* mesh)
 {
     return mesh->index_count;
 }

@@ -5,33 +5,33 @@
 #include "engine.h"
 #include "pipeline_util.h"
 
-extern "C" ImageHandle GenerateBRDFLUT(Engine *engine, RgCmdPool *cmd_pool, uint32_t dim)
+EgImage egGenerateBRDFLUT(EgEngine *engine, RgCmdPool *cmd_pool, uint32_t dim)
 {
-    RgDevice *device = EngineGetDevice(engine);
+    RgDevice *device = egEngineGetDevice(engine);
 
-    RgImageInfo info = {};
-    info.extent = { dim, dim, 1 };
+    RgImageInfo info = {0};
+    info.extent = (RgExtent3D){ dim, dim, 1 };
     info.format = RG_FORMAT_RG32_SFLOAT;
     info.aspect = RG_IMAGE_ASPECT_COLOR;
     info.usage = RG_IMAGE_USAGE_COLOR_ATTACHMENT | RG_IMAGE_USAGE_SAMPLED;
     info.sample_count = 1;
     info.mip_count = 1;
     info.layer_count = 1;
-    ImageHandle image = EngineAllocateImageHandle(engine, &info);
+    EgImage image = egEngineAllocateImage(engine, &info);
 
-    RgRenderPassInfo render_pass_info = {};
+    RgRenderPassInfo render_pass_info = {0};
     render_pass_info.color_attachments = &image.image;
     render_pass_info.color_attachment_count = 1;
     RgRenderPass *render_pass = rgRenderPassCreate(device, &render_pass_info);
 
-    RgPipeline *pipeline = EngineCreateGraphicsPipeline(engine, "../shaders/brdf.hlsl");
+    RgPipeline *pipeline = egEngineCreateGraphicsPipeline(engine, "../shaders/brdf.hlsl");
 
     RgCmdBuffer *cmd_buffer = rgCmdBufferCreate(device, cmd_pool);
 
     rgCmdBufferBegin(cmd_buffer);
 
     {
-        RgClearValue clear_value = {};
+        RgClearValue clear_value = {0};
         rgCmdSetRenderPass(cmd_buffer, render_pass, 1, &clear_value);
 
         rgCmdBindPipeline(cmd_buffer, pipeline);

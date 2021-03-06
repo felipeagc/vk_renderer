@@ -6,23 +6,17 @@
 extern "C" {
 #endif
 
-#ifdef __GNUC__
-    #define STRING_BUILDER_PRINTF_FORMATTING(x, y) __attribute__((format(printf, x, y)))
-#else
-    #define STRING_BUILDER_PRINTF_FORMATTING(x, y)
-#endif
+typedef struct EgAllocator EgAllocator;
+typedef struct EgStringBuilder EgStringBuilder;
 
-typedef struct Allocator Allocator;
-typedef struct StringBuilder StringBuilder;
+EgStringBuilder *egStringBuilderCreate(EgAllocator *allocator);
+void egStringBuilderDestroy(EgStringBuilder *sb);
 
-StringBuilder *StringBuilderCreate(Allocator *allocator);
-void StringBuilderDestroy(StringBuilder *sb);
-
-void StringBuilderAppend(StringBuilder *sb, const char *str);
-void StringBuilderAppendLen(StringBuilder *sb, const char *str, size_t length);
-STRING_BUILDER_PRINTF_FORMATTING(2, 3)
-void StringBuilderAppendFormat(StringBuilder *sb, const char *format, ...);
-const char *StringBuilderBuild(StringBuilder *sb, Allocator *allocator);
+void egStringBuilderAppend(EgStringBuilder *sb, const char *str);
+void egStringBuilderAppendLen(EgStringBuilder *sb, const char *str, size_t length);
+EG_PRINTF_FORMATTING(2, 3)
+void egStringBuilderAppendFormat(EgStringBuilder *sb, const char *format, ...);
+const char *egStringBuilderBuild(EgStringBuilder *sb, EgAllocator *allocator);
 
 #ifdef __cplusplus
 }

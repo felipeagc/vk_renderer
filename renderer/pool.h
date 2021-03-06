@@ -6,17 +6,17 @@
 extern "C" {
 #endif
 
-typedef struct Allocator Allocator;
-typedef struct Pool Pool;
+typedef struct EgAllocator EgAllocator;
+typedef struct EgPool EgPool;
 
-Pool *PoolCreate(Allocator *allocator, uint32_t slot_count);
-void PoolDestroy(Pool *pool);
+EgPool *egPoolCreate(EgAllocator *allocator, uint32_t slot_count);
+void egPoolDestroy(EgPool *pool);
 
-uint32_t PoolGetSlotCount(Pool *pool);
-uint32_t PoolGetFreeSlotCount(Pool *pool);
+uint32_t egPoolGetSlotCount(EgPool *pool);
+uint32_t egPoolGetFreeSlotCount(EgPool *pool);
 
-uint32_t PoolAllocateSlot(Pool *pool);
-void PoolFreeSlot(Pool *pool, uint32_t slot);
+uint32_t egPoolAllocateSlot(EgPool *pool);
+void egPoolFreeSlot(EgPool *pool, uint32_t slot);
 
 #ifdef __cplusplus
 }

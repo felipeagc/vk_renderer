@@ -6,16 +6,14 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_library(
   renderer
 
-  # renderer/platform.h
-  # renderer/platform.cpp
-  renderer/array.hpp
+  renderer/array.h
   renderer/math.h
   renderer/allocator.h
   renderer/allocator.c
   renderer/pool.h
-  renderer/pool.cpp
+  renderer/pool.c
   renderer/format.h
-  renderer/format.cpp
+  renderer/format.c
   renderer/lexer.h
   renderer/lexer.cpp
   renderer/string_map.hpp
@@ -25,19 +23,19 @@ add_library(
   renderer/string_builder.cpp
 
   renderer/engine.h
-  renderer/engine.cpp
+  renderer/engine.c
   renderer/buffer_pool.h
   renderer/buffer_pool.c
   renderer/camera.h
-  renderer/camera.cpp
+  renderer/camera.c
   renderer/mesh.h
-  renderer/mesh.cpp
+  renderer/mesh.c
   renderer/model_asset.h
-  renderer/model_asset.cpp
+  renderer/model_asset.c
   renderer/pipeline_util.h
-  renderer/pipeline_util.cpp
+  renderer/pipeline_util.c
   renderer/pbr.h
-  renderer/pbr.cpp
+  renderer/pbr.c
 
   thirdparty/rg/rg.h
   thirdparty/rg/rg.c
@@ -93,7 +91,7 @@ if (WIN32)
   target_link_libraries(renderer PUBLIC gdi32 user32 ole32 oleaut32 advapi32 shlwapi)
 endif(WIN32)
 
-add_executable(app app/main.cpp)
+add_executable(app app/main.c)
 target_link_libraries(app PUBLIC renderer)
 
 if(MSVC)

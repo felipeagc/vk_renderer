@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -16,6 +17,12 @@ extern "C" {
 #define EG_INLINE __attribute__((always_inline)) __attribute__((unused)) inline
 #else
 #define EG_INLINE inline
+#endif
+
+#ifdef __GNUC__
+    #define EG_PRINTF_FORMATTING(x, y) __attribute__((format(printf, x, y)))
+#else
+    #define EG_PRINTF_FORMATTING(x, y)
 #endif
 
 #define EG_STR(a) #a

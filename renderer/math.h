@@ -46,7 +46,7 @@ static float4 V4(float x, float y, float z, float w)
 }
 
 EG_INLINE
-static float4x4 eg_float4x4_diagonal(float v)
+static float4x4 egFloat4x4Diagonal(float v)
 {
     float4x4 mat;
     memset(&mat, 0, sizeof(mat));
@@ -65,85 +65,85 @@ static float4x4 eg_float4x4_diagonal(float v)
 /////////////////////////////
 
 EG_INLINE
-static float eg_float3_length(float3 vec)
+static float egFloat3Length(float3 vec)
 {
     return sqrtf((vec.x * vec.x) + (vec.y * vec.y) + (vec.z * vec.z));
 }
 
 EG_INLINE
-static float3 eg_float3_add(float3 left, float3 right)
+static float3 egFloat3Add(float3 left, float3 right)
 {
     return V3(left.x + right.x, left.y + right.y, left.z + right.z);
 }
 
 EG_INLINE
-static float3 eg_float3_add_scalar(float3 left, float right)
+static float3 egFloat3AddScalar(float3 left, float right)
 {
     return V3(left.x + right, left.y + right, left.z + right);
 }
 
 EG_INLINE
-static float3 eg_float3_sub(float3 left, float3 right)
+static float3 egFloat3Sub(float3 left, float3 right)
 {
     return V3(left.x - right.x, left.y - right.y, left.z - right.z);
 }
 
 EG_INLINE
-static float3 eg_float3_sub_scalar(float3 left, float right)
+static float3 egFloat3SubScalar(float3 left, float right)
 {
     return V3(left.x - right, left.y - right, left.z - right);
 }
 
 EG_INLINE
-static float3 eg_float3_mul(float3 left, float3 right)
+static float3 egFloat3Mul(float3 left, float3 right)
 {
     return V3(left.x * right.x, left.y * right.y, left.z * right.z);
 }
 
 EG_INLINE
-static float3 eg_float3_mul_scalar(float3 left, float right)
+static float3 egFloat3MulScalar(float3 left, float right)
 {
     return V3(left.x * right, left.y * right, left.z * right);
 }
 
 EG_INLINE
-static float3 eg_float3_div(float3 left, float3 right)
+static float3 egFloat3Div(float3 left, float3 right)
 {
     return V3(left.x / right.x, left.y / right.y, left.z / right.z);
 }
 
 EG_INLINE
-static float3 eg_float3_div_scalar(float3 left, float right)
+static float3 egFloat3DivScalar(float3 left, float right)
 {
     return V3(left.x / right, left.y / right, left.z / right);
 }
 
 EG_INLINE
-static float eg_float3_distance(float3 left, float3 right)
+static float egFloat3Distance(float3 left, float3 right)
 {
-    return eg_float3_length(eg_float3_sub(left, right));
+    return egFloat3Length(egFloat3Sub(left, right));
 }
 
 EG_INLINE
-static float3 eg_float3_normalize(float3 vec)
+static float3 egFloat3Normalize(float3 vec)
 {
     float3 result = vec;
-    float norm = eg_float3_length(vec);
+    float norm = egFloat3Length(vec);
     if (norm != 0.0f)
     {
-        result = eg_float3_mul_scalar(vec, (1.0f / norm));
+        result = egFloat3MulScalar(vec, (1.0f / norm));
     }
     return result;
 }
 
 EG_INLINE
-static float eg_float3_dot(float3 left, float3 right)
+static float egFloat3Dot(float3 left, float3 right)
 {
     return (left.x * right.x) + (left.y * right.y) + (left.z * right.z);
 }
 
 EG_INLINE
-static float3 eg_float3_cross(float3 left, float3 right)
+static float3 egFloat3Cross(float3 left, float3 right)
 {
     float3 result;
     result.x = (left.y * right.z) - (left.z * right.y);
@@ -159,55 +159,55 @@ static float3 eg_float3_cross(float3 left, float3 right)
 /////////////////////////////
 
 EG_INLINE
-static float4 eg_float4_add(float4 left, float4 right)
+static float4 egFloat4Add(float4 left, float4 right)
 {
     return V4(left.x + right.x, left.y + right.y, left.z + right.z, left.w + right.w);
 }
 
 EG_INLINE
-static float4 eg_float4_add_scalar(float4 left, float right)
+static float4 egFloat4AddScalar(float4 left, float right)
 {
     return V4(left.x + right, left.y + right, left.z + right, left.w + right);
 }
 
 EG_INLINE
-static float4 eg_float4_sub(float4 left, float4 right)
+static float4 egFloat4Sub(float4 left, float4 right)
 {
     return V4(left.x - right.x, left.y - right.y, left.z - right.z, left.w - right.w);
 }
 
 EG_INLINE
-static float4 eg_float4_sub_scalar(float4 left, float right)
+static float4 egFloat4SubScalar(float4 left, float right)
 {
     return V4(left.x - right, left.y - right, left.z - right, left.w - right);
 }
 
 EG_INLINE
-static float4 eg_float4_mul(float4 left, float4 right)
+static float4 egFloat4Mul(float4 left, float4 right)
 {
     return V4(left.x * right.x, left.y * right.y, left.z * right.z, left.w * right.w);
 }
 
 EG_INLINE
-static float4 eg_float4_mul_scalar(float4 left, float right)
+static float4 egFloat4MulScalar(float4 left, float right)
 {
     return V4(left.x * right, left.y * right, left.z * right, left.w * right);
 }
 
 EG_INLINE
-static float4 eg_float4_div(float4 left, float4 right)
+static float4 egFloat4Div(float4 left, float4 right)
 {
     return V4(left.x / right.x, left.y / right.y, left.z / right.z, left.w / right.w);
 }
 
 EG_INLINE
-static float4 eg_float4_div_scalar(float4 left, float right)
+static float4 egFloat4DivScalar(float4 left, float right)
 {
     return V4(left.x / right, left.y / right, left.z / right, left.w / right);
 }
 
 EG_INLINE
-static float eg_float4_dot(float4 left, float4 right)
+static float egFloat4Dot(float4 left, float4 right)
 {
     return (left.x * right.x) + (left.y * right.y) + (left.z * right.z) +
            (left.w * right.w);
@@ -220,7 +220,7 @@ static float eg_float4_dot(float4 left, float4 right)
 /////////////////////////////
 
 EG_INLINE
-static float4x4 eg_float4x4_mul_scalar(const float4x4 *left, float right)
+static float4x4 egFloat4x4MulScalar(const float4x4 *left, float right)
 {
     float4x4 result;
     memset(&result, 0, sizeof(result));
@@ -237,7 +237,7 @@ static float4x4 eg_float4x4_mul_scalar(const float4x4 *left, float right)
 }
 
 EG_INLINE
-static float4x4 eg_float4x4_div_scalar(const float4x4 *left, float right)
+static float4x4 egFloat4x4DivScalar(const float4x4 *left, float right)
 {
     float4x4 result;
     memset(&result, 0, sizeof(result));
@@ -254,7 +254,7 @@ static float4x4 eg_float4x4_div_scalar(const float4x4 *left, float right)
 }
 
 EG_INLINE
-static float4x4 eg_float4x4_mul(const float4x4 *left, const float4x4 *right)
+static float4x4 egFloat4x4Mul(const float4x4 *left, const float4x4 *right)
 {
     float4x4 result;
     memset(&result, 0, sizeof(result));
@@ -277,7 +277,7 @@ static float4x4 eg_float4x4_mul(const float4x4 *left, const float4x4 *right)
 }
 
 EG_INLINE
-static float4 eg_float4x4_mul_vector(const float4x4 *left, const float4 *right)
+static float4 egFloat4x4MulVector(const float4x4 *left, const float4 *right)
 {
     float4 result;
 
@@ -294,7 +294,7 @@ static float4 eg_float4x4_mul_vector(const float4x4 *left, const float4 *right)
 }
 
 EG_INLINE
-static float4x4 eg_float4x4_add(const float4x4 *left, const float4x4 *right)
+static float4x4 egFloat4x4Add(const float4x4 *left, const float4x4 *right)
 {
     float4x4 result;
     memset(&result, 0, sizeof(result));
@@ -312,7 +312,7 @@ static float4x4 eg_float4x4_add(const float4x4 *left, const float4x4 *right)
 }
 
 EG_INLINE
-static float4x4 eg_float4x4_sub(const float4x4 *left, const float4x4 *right)
+static float4x4 egFloat4x4Sub(const float4x4 *left, const float4x4 *right)
 {
     float4x4 result;
     memset(&result, 0, sizeof(result));
@@ -329,7 +329,7 @@ static float4x4 eg_float4x4_sub(const float4x4 *left, const float4x4 *right)
     return result;
 }
 
-static inline float4x4 eg_float4x4_transpose(const float4x4 *mat)
+static inline float4x4 egFloat4x4Transpose(const float4x4 *mat)
 {
     float4x4 result = *mat;
     result.xy = mat->yx;
@@ -350,7 +350,7 @@ static inline float4x4 eg_float4x4_transpose(const float4x4 *mat)
     return result;
 }
 
-static inline float4x4 eg_float4x4_inverse(const float4x4 *mat)
+static inline float4x4 egFloat4x4Inverse(const float4x4 *mat)
 {
     float4x4 inv;
     memset(&inv, 0, sizeof(inv));
@@ -403,12 +403,12 @@ static inline float4x4 eg_float4x4_inverse(const float4x4 *mat)
 
     float det = a * inv.xx + b * inv.yx + c * inv.zx + d * inv.wx;
 
-    inv = eg_float4x4_mul_scalar(&inv, 1.0f / det);
+    inv = egFloat4x4MulScalar(&inv, 1.0f / det);
 
     return inv;
 }
 
-static inline float4x4 eg_float4x4_perspective(float fovy, float aspect, float n, float f)
+static inline float4x4 egFloat4x4Perspective(float fovy, float aspect, float n, float f)
 {
     float c = 1.0f / tanf(fovy / 2.0f);
 
@@ -426,7 +426,7 @@ static inline float4x4 eg_float4x4_perspective(float fovy, float aspect, float n
 }
 
 static inline float4x4
-eg_float4x4_perspective_reverse_z(float fovy, float aspect_ratio, float z_near)
+egFloat4x4PerspectiveReserveZ(float fovy, float aspect_ratio, float z_near)
 {
     float4x4 result;
     memset(&result, 0, sizeof(result));
@@ -445,13 +445,13 @@ eg_float4x4_perspective_reverse_z(float fovy, float aspect_ratio, float z_near)
     return result;
 }
 
-static inline float4x4 eg_float4x4_look_at(float3 eye, float3 center, float3 up)
+static inline float4x4 egFloat4x4LookAt(float3 eye, float3 center, float3 up)
 {
-    float3 f = eg_float3_normalize(eg_float3_sub(center, eye));
-    float3 s = eg_float3_normalize(eg_float3_cross(f, up));
-    float3 u = eg_float3_cross(s, f);
+    float3 f = egFloat3Normalize(egFloat3Sub(center, eye));
+    float3 s = egFloat3Normalize(egFloat3Cross(f, up));
+    float3 u = egFloat3Cross(s, f);
 
-    float4x4 result = eg_float4x4_diagonal(1.0f);
+    float4x4 result = egFloat4x4Diagonal(1.0f);
 
     result.xx = s.x;
     result.yx = s.y;
@@ -465,34 +465,34 @@ static inline float4x4 eg_float4x4_look_at(float3 eye, float3 center, float3 up)
     result.yz = -f.y;
     result.zz = -f.z;
 
-    result.wx = -eg_float3_dot(s, eye);
-    result.wy = -eg_float3_dot(u, eye);
-    result.wz = eg_float3_dot(f, eye);
+    result.wx = -egFloat3Dot(s, eye);
+    result.wy = -egFloat3Dot(u, eye);
+    result.wz = egFloat3Dot(f, eye);
 
     return result;
 }
 
-EG_INLINE static void eg_float4x4_translate(float4x4 *mat, float3 translation)
+EG_INLINE static void egFloat4x4Translate(float4x4 *mat, float3 translation)
 {
     mat->wx += translation.x;
     mat->wy += translation.y;
     mat->wz += translation.z;
 }
 
-EG_INLINE static void eg_float4x4_scale(float4x4 *mat, float3 scale)
+EG_INLINE static void egFloat4x4Scale(float4x4 *mat, float3 scale)
 {
     mat->xx *= scale.x;
     mat->yy *= scale.y;
     mat->zz *= scale.z;
 }
 
-static inline void eg_float4x4_rotate(float4x4 *mat, float angle, float3 axis)
+static inline void egFloat4x4Rotate(float4x4 *mat, float angle, float3 axis)
 {
     float c = cosf(angle);
     float s = sinf(angle);
 
-    axis = eg_float3_normalize(axis);
-    float3 temp = eg_float3_mul_scalar(axis, 1.0f - c);
+    axis = egFloat3Normalize(axis);
+    float3 temp = egFloat3MulScalar(axis, 1.0f - c);
 
     float4x4 rotate;
     memset(&rotate, 0, sizeof(rotate));
@@ -516,17 +516,17 @@ static inline void eg_float4x4_rotate(float4x4 *mat, float angle, float3 axis)
 
     float4 *cols = (float4 *)&result;
 
-    cols[0] = eg_float4_mul_scalar(mat_cols[0], rotate.xx);
-    cols[0] = eg_float4_add(cols[0], eg_float4_mul_scalar(mat_cols[1], rotate.xy));
-    cols[0] = eg_float4_add(cols[0], eg_float4_mul_scalar(mat_cols[2], rotate.xz));
+    cols[0] = egFloat4MulScalar(mat_cols[0], rotate.xx);
+    cols[0] = egFloat4Add(cols[0], egFloat4MulScalar(mat_cols[1], rotate.xy));
+    cols[0] = egFloat4Add(cols[0], egFloat4MulScalar(mat_cols[2], rotate.xz));
 
-    cols[1] = eg_float4_mul_scalar(mat_cols[0], rotate.yx);
-    cols[1] = eg_float4_add(cols[1], eg_float4_mul_scalar(mat_cols[1], rotate.yy));
-    cols[1] = eg_float4_add(cols[1], eg_float4_mul_scalar(mat_cols[2], rotate.yz));
+    cols[1] = egFloat4MulScalar(mat_cols[0], rotate.yx);
+    cols[1] = egFloat4Add(cols[1], egFloat4MulScalar(mat_cols[1], rotate.yy));
+    cols[1] = egFloat4Add(cols[1], egFloat4MulScalar(mat_cols[2], rotate.yz));
 
-    cols[2] = eg_float4_mul_scalar(mat_cols[0], rotate.zx);
-    cols[2] = eg_float4_add(cols[2], eg_float4_mul_scalar(mat_cols[1], rotate.zy));
-    cols[2] = eg_float4_add(cols[2], eg_float4_mul_scalar(mat_cols[2], rotate.zz));
+    cols[2] = egFloat4MulScalar(mat_cols[0], rotate.zx);
+    cols[2] = egFloat4Add(cols[2], egFloat4MulScalar(mat_cols[1], rotate.zy));
+    cols[2] = egFloat4Add(cols[2], egFloat4MulScalar(mat_cols[2], rotate.zz));
 
     cols[3] = mat_cols[3];
 
@@ -540,16 +540,16 @@ static inline void eg_float4x4_rotate(float4x4 *mat, float angle, float3 axis)
 /////////////////////////////
 
 EG_INLINE
-static float eg_quat_dot(quat128 left, quat128 right)
+static float egQuatDot(quat128 left, quat128 right)
 {
     return (left.x * right.x) + (left.y * right.y) + (left.z * right.z) +
            (left.w * right.w);
 }
 
 EG_INLINE
-static quat128 eg_quat_normalize(quat128 left)
+static quat128 egQuatNormalize(quat128 left)
 {
-    float length = sqrtf(eg_quat_dot(left, left));
+    float length = sqrtf(egQuatDot(left, left));
     quat128 result;
     if (length <= 0.0f)
     {
@@ -568,7 +568,7 @@ static quat128 eg_quat_normalize(quat128 left)
 }
 
 EG_INLINE
-static quat128 eg_quat_conjugate(quat128 quat)
+static quat128 egQuatConjugate(quat128 quat)
 {
     quat128 result;
     result.w = quat.w;
@@ -578,7 +578,7 @@ static quat128 eg_quat_conjugate(quat128 quat)
     return result;
 }
 
-static inline quat128 eg_quat_look_at(float3 direction, float3 up)
+static inline quat128 egQuatLookAt(float3 direction, float3 up)
 {
     float m[3][3] = {
         {0, 0, 0},
@@ -586,17 +586,17 @@ static inline quat128 eg_quat_look_at(float3 direction, float3 up)
         {0, 0, 0},
     };
 
-    float3 col2 = eg_float3_mul_scalar(direction, -1.0f);
+    float3 col2 = egFloat3MulScalar(direction, -1.0f);
     m[2][0] = col2.x;
     m[2][1] = col2.y;
     m[2][2] = col2.z;
 
-    float3 col0 = eg_float3_normalize(eg_float3_cross(up, col2));
+    float3 col0 = egFloat3Normalize(egFloat3Cross(up, col2));
     m[0][0] = col0.x;
     m[0][1] = col0.y;
     m[0][2] = col0.z;
 
-    float3 col1 = eg_float3_cross(col2, col0);
+    float3 col1 = egFloat3Cross(col2, col0);
     m[1][0] = col1.x;
     m[1][1] = col1.y;
     m[1][2] = col1.z;
@@ -662,7 +662,7 @@ static inline quat128 eg_quat_look_at(float3 direction, float3 up)
 }
 
 EG_INLINE
-static quat128 eg_quat_from_axis_angle(float3 axis, float angle)
+static quat128 egQuatFromAxisAngle(float3 axis, float angle)
 {
     float s = sinf(angle / 2.0f);
     quat128 result;
@@ -673,7 +673,7 @@ static quat128 eg_quat_from_axis_angle(float3 axis, float angle)
     return result;
 }
 
-static inline quat128 eg_quat_from_matrix(const float4x4 *mat)
+static inline quat128 egQuatFromMatrix(const float4x4 *mat)
 {
     quat128 result;
     float trace = mat->xx + mat->yy + mat->zz;
@@ -712,9 +712,9 @@ static inline quat128 eg_quat_from_matrix(const float4x4 *mat)
     return result;
 }
 
-static inline void eg_quat_to_axis_angle(quat128 quat, float3 *axis, float *angle)
+static inline void egQuatToAxisAngle(quat128 quat, float3 *axis, float *angle)
 {
-    quat = eg_quat_normalize(quat);
+    quat = egQuatNormalize(quat);
     *angle = 2.0f * acosf(quat.w);
     float s = sqrtf(1.0f - quat.w * quat.w);
     if (s < 0.001)
@@ -731,9 +731,9 @@ static inline void eg_quat_to_axis_angle(quat128 quat, float3 *axis, float *angl
     }
 }
 
-static inline float4x4 eg_quat_to_matrix(quat128 quat)
+static inline float4x4 egQuatToMatrix(quat128 quat)
 {
-    float4x4 result = eg_float4x4_diagonal(1.0f);
+    float4x4 result = egFloat4x4Diagonal(1.0f);
 
     float xx = quat.x * quat.x;
     float yy = quat.y * quat.y;

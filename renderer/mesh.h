@@ -7,22 +7,22 @@
 extern "C" {
 #endif
 
-typedef struct Engine Engine;
-typedef struct Mesh Mesh;
-typedef struct Allocator Allocator;
+typedef struct EgEngine EgEngine;
+typedef struct EgMesh EgMesh;
+typedef struct EgAllocator EgAllocator;
 
-Mesh *MeshCreateCube(Allocator *allocator, Engine *engine, RgCmdPool *cmd_pool);
-Mesh *MeshCreateUVSphere(
-        Allocator *allocator,
-        Engine *engine,
+EgMesh *egMeshCreateCube(EgAllocator *allocator, EgEngine *engine, RgCmdPool *cmd_pool);
+EgMesh *egMeshCreateUVSphere(
+        EgAllocator *allocator,
+        EgEngine *engine,
         RgCmdPool *cmd_pool,
         float radius,
         uint32_t divisions);
-void MeshDestroy(Mesh *mesh);
+void egMeshDestroy(EgMesh *mesh);
 
-RgBuffer *MeshGetVertexBuffer(Mesh* mesh);
-RgBuffer *MeshGetIndexBuffer(Mesh* mesh);
-uint32_t MeshGetIndexCount(Mesh* mesh);
+RgBuffer *egMeshGetVertexBuffer(EgMesh* mesh);
+RgBuffer *egMeshGetIndexBuffer(EgMesh* mesh);
+uint32_t egMeshGetIndexCount(EgMesh* mesh);
 
 #ifdef __cplusplus
 }

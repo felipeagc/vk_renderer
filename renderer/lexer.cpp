@@ -6,7 +6,7 @@
 #include "allocator.h"
 #include "format.h"
 
-static inline int64_t LengthLeft(TokenizerState state, size_t offset)
+static inline int64_t LengthLeft(EgTokenizerState state, size_t offset)
 {
     return ((int64_t)state.length) - (int64_t)(state.pos + offset);
 }
@@ -26,16 +26,16 @@ static inline bool IsAlphaNum(char c)
     return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c == '_') || (c >= '0' && c <= '9');
 }
 
-TokenizerState NewTokenizerState(const char *text, size_t length)
+EgTokenizerState egTokenizerCreate(const char *text, size_t length)
 {
-    TokenizerState state = {};
+    EgTokenizerState state = {};
     state.text = text;
     state.length = length;
     state.pos = 0;
     return state;
 }
 
-TokenizerState NextToken(Allocator *allocator, TokenizerState state, Token *token)
+EgTokenizerState egTokenizerNextToken(EgAllocator *allocator, EgTokenizerState state, EgToken *token)
 {
     (void)allocator;
     *token = {};
@@ -82,12 +82,12 @@ TokenizerState NextToken(Allocator *allocator, TokenizerState state, Token *toke
         else
         {
             token->type = TOKEN_ERROR;
-            token->str = Strdup(allocator, "unclosed string");
+            token->str = egStrdup(allocator, "unclosed string");
             break;
         }
 
         token->type = TOKEN_STRING;
-        token->str = NullTerminate(allocator, string, content_length);
+        token->str = egNullTerminate(allocator, string, content_length);
 
         break;
     }
@@ -117,13 +117,13 @@ TokenizerState NextToken(Allocator *allocator, TokenizerState state, Token *toke
             }
 
             token->type = TOKEN_IDENT;
-            token->str = NullTerminate(allocator, &state.text[state.pos], ident_length);
+            token->str = egNullTerminate(allocator, &state.text[state.pos], ident_length);
             state.pos += ident_length;
         }
         else
         {
             token->type = TOKEN_ERROR;
-            token->str = Sprintf(allocator, "unknown token: '%c'", state.text[state.pos]);
+            token->str = egSprintf(allocator, "unknown token: '%c'", state.text[state.pos]);
             state.pos++;
         }
         break;
@@ -133,14 +133,14 @@ TokenizerState NextToken(Allocator *allocator, TokenizerState state, Token *toke
     return state;
 }
 
-void FreeToken(Allocator *allocator, Token token)
+void egTokenizerFreeToken(EgAllocator *allocator, EgToken token)
 {
     switch (token.type)
     {
     case TOKEN_STRING:
     case TOKEN_IDENT:
     {
-        Free(allocator, (void*)token.str);
+        egFree(allocator, (void*)token.str);
         break;
     }
     default: break;

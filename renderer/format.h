@@ -1,23 +1,17 @@
 #pragma once
 
-#include <stdarg.h>
+#include "base.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef struct Allocator Allocator;
+typedef struct EgAllocator EgAllocator;
 
-#ifdef __GNUC__
-    #define FORMAT_PRINTF_FORMATTING(x, y) __attribute__((format(printf, x, y)))
-#else
-    #define FORMAT_PRINTF_FORMATTING(x, y)
-#endif
+EG_PRINTF_FORMATTING(2, 3)
+const char* egSprintf(EgAllocator *allocator, const char *format, ...);
 
-FORMAT_PRINTF_FORMATTING(2, 3)
-const char* Sprintf(Allocator *allocator, const char *format, ...);
-
-const char* Vsprintf(Allocator *allocator, const char *format, va_list args);
+const char* egVsprintf(EgAllocator *allocator, const char *format, va_list args);
 
 #ifdef __cplusplus
 }
