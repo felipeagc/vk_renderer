@@ -25,6 +25,8 @@ extern "C" {
     #define EG_PRINTF_FORMATTING(x, y)
 #endif
 
+#define EG_CARRAY_LENGTH(arr) (sizeof(arr) / sizeof(arr[0]))
+
 #define EG_STR(a) #a
 
 #define EG_ASSERT(value)                                                                 \

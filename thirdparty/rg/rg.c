@@ -3484,8 +3484,26 @@ void rgDescriptorSetUpdate(
                 const RgDescriptor *descriptor = &entry->descriptors[j];
                 VkDescriptorImageInfo *image_info = &image_infos[j];
                 image_info->imageView = descriptor->image.image->view;
-                image_info->imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
                 image_info->sampler = VK_NULL_HANDLE;
+                image_info->imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+                switch (descriptor->image.image->info.format)
+                {
+                case RG_FORMAT_D16_UNORM:
+                case RG_FORMAT_D32_SFLOAT:
+                {
+                    image_info->imageLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
+                    break;
+                }
+                case RG_FORMAT_D16_UNORM_S8_UINT:
+                case RG_FORMAT_D24_UNORM_S8_UINT:
+                case RG_FORMAT_D32_SFLOAT_S8_UINT:
+                {
+                    image_info->imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+                    break;
+                }
+                default: break;
+                }
             }
             write->pImageInfo = image_infos;
             break;

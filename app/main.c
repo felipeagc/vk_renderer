@@ -10,8 +10,11 @@ typedef struct App
 {
     EgEngine *engine;
     EgImage offscreen_image;
-    RgImage *offscreen_depth_image;
+    EgImage offscreen_depth_image;
     RgRenderPass *offscreen_pass;
+
+    EgImage pingpong_images[2];
+    RgRenderPass *pingpong_renderpasses[2];
 
     RgCmdPool *cmd_pool;
     RgCmdBuffer *cmd_buffers[2];
@@ -24,6 +27,7 @@ typedef struct App
 
     RgPipeline *offscreen_pipeline;
     RgPipeline *backbuffer_pipeline;
+    RgPipeline *blur_pipeline;
 
     EgModelManager *model_manager;
     EgFPSCamera camera;
@@ -32,13 +36,13 @@ typedef struct App
     EgModelAsset *gltf_asset;
 } App;
 
-App *AppCreate();
-void AppDestroy(App *app);
-void AppResize(App *app);
-void AppRenderFrame(App *app);
-void AppRun(App *app);
+App *appCreate();
+void appDestroy(App *app);
+void appResize(App *app);
+void appRenderFrame(App *app);
+void appRun(App *app);
 
-App *AppCreate()
+App *appCreate()
 {
     App *app = egAllocate(NULL, sizeof(App));
     *app = (App){};
@@ -76,6 +80,10 @@ App *AppCreate()
         egEngineCreateGraphicsPipeline(app->engine, "../shaders/post.hlsl");
     EG_ASSERT(app->backbuffer_pipeline);
 
+    app->blur_pipeline =
+        egEngineCreateGraphicsPipeline(app->engine, "../shaders/blur.hlsl");
+    EG_ASSERT(app->blur_pipeline);
+
     app->cmd_pool = rgCmdPoolCreate(device, RG_QUEUE_TYPE_GRAPHICS);
     app->cmd_buffers[0] = rgCmdBufferCreate(device, app->cmd_pool);
     app->cmd_buffers[1] = rgCmdBufferCreate(device, app->cmd_pool);
@@ -95,12 +103,12 @@ App *AppCreate()
     app->gltf_asset = egModelAssetFromGltf(app->model_manager, gltf_data, gltf_data_size);
     egFree(NULL, gltf_data);
 
-    AppResize(app);
+    appResize(app);
 
     return app;
 }
 
-void AppDestroy(App *app)
+void appDestroy(App *app)
 {
     RgDevice *device = egEngineGetDevice(app->engine);
 
@@ -111,11 +119,21 @@ void AppDestroy(App *app)
 
     rgPipelineDestroy(device, app->offscreen_pipeline);
     rgPipelineDestroy(device, app->backbuffer_pipeline);
+    rgPipelineDestroy(device, app->blur_pipeline);
 
     egEngineFreeSampler(app->engine, &app->sampler);
 
+    for (size_t i = 0; i < EG_CARRAY_LENGTH(app->pingpong_renderpasses); ++i)
+    {
+        rgRenderPassDestroy(device, app->pingpong_renderpasses[i]);
+    }
+    for (size_t i = 0; i < EG_CARRAY_LENGTH(app->pingpong_images); ++i)
+    {
+        egEngineFreeImage(app->engine, &app->pingpong_images[i]);
+    }
+
     egEngineFreeImage(app->engine, &app->offscreen_image);
-    rgImageDestroy(device, app->offscreen_depth_image);
+    egEngineFreeImage(app->engine, &app->offscreen_depth_image);
     rgRenderPassDestroy(device, app->offscreen_pass);
 
     rgCmdBufferDestroy(device, app->cmd_pool, app->cmd_buffers[0]);
@@ -127,7 +145,7 @@ void AppDestroy(App *app)
     egFree(NULL, app);
 }
 
-void AppResize(App *app)
+void appResize(App *app)
 {
     RgDevice *device = egEngineGetDevice(app->engine);
 
@@ -137,19 +155,36 @@ void AppResize(App *app)
     if (app->offscreen_pass)
     {
         rgRenderPassDestroy(device, app->offscreen_pass);
+        app->offscreen_pass = NULL;
     }
     if (app->offscreen_image.image)
     {
         egEngineFreeImage(app->engine, &app->offscreen_image);
     }
-    if (app->offscreen_depth_image)
+    if (app->offscreen_depth_image.image)
     {
-        rgImageDestroy(device, app->offscreen_depth_image);
+        egEngineFreeImage(app->engine, &app->offscreen_depth_image);
+    }
+
+    for (size_t i = 0; i < EG_CARRAY_LENGTH(app->pingpong_renderpasses); ++i)
+    {
+        if (app->pingpong_renderpasses[i])
+        {
+            rgRenderPassDestroy(device, app->pingpong_renderpasses[i]);
+            app->pingpong_renderpasses[i] = NULL;
+        }
+    }
+    for (size_t i = 0; i < EG_CARRAY_LENGTH(app->pingpong_images); ++i)
+    {
+        if (app->pingpong_images[i].image)
+        {
+            egEngineFreeImage(app->engine, &app->pingpong_images[i]);
+        }
     }
 
     RgImageInfo offscreen_image_info = {
         .extent = {width, height, 1},
-        .format = RG_FORMAT_RGBA8_UNORM,
+        .format = RG_FORMAT_RGBA16_SFLOAT,
         .usage = RG_IMAGE_USAGE_SAMPLED | RG_IMAGE_USAGE_COLOR_ATTACHMENT,
         .aspect = RG_IMAGE_ASPECT_COLOR,
         .sample_count = 1,
@@ -161,26 +196,54 @@ void AppResize(App *app)
     RgImageInfo offscreen_depth_image_info = {
         .extent = {width, height, 1},
         .format = RG_FORMAT_D32_SFLOAT_S8_UINT,
-        .usage = RG_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT,
-        .aspect = RG_IMAGE_ASPECT_DEPTH | RG_IMAGE_ASPECT_STENCIL,
+        .usage = RG_IMAGE_USAGE_SAMPLED | RG_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT,
+        .aspect = RG_IMAGE_ASPECT_DEPTH,
         .sample_count = 1,
         .mip_count = 1,
         .layer_count = 1,
     };
-    app->offscreen_depth_image = rgImageCreate(device, &offscreen_depth_image_info);
+    app->offscreen_depth_image =
+        egEngineAllocateImage(app->engine, &offscreen_depth_image_info);
+
+    RgImageInfo pingpong_image_info = {
+        .extent = {width, height, 1},
+        .format = RG_FORMAT_RGBA16_SFLOAT,
+        .usage = RG_IMAGE_USAGE_SAMPLED | RG_IMAGE_USAGE_COLOR_ATTACHMENT,
+        .aspect = RG_IMAGE_ASPECT_COLOR,
+        .sample_count = 1,
+        .mip_count = 1,
+        .layer_count = 1,
+    };
+    for (size_t i = 0; i < EG_CARRAY_LENGTH(app->pingpong_images); ++i)
+    {
+        app->pingpong_images[i] =
+            egEngineAllocateImage(app->engine, &pingpong_image_info);
+
+        app->pingpong_renderpasses[i] = rgRenderPassCreate(
+            device,
+            &(RgRenderPassInfo){
+                .color_attachments = (RgImage *[]){app->pingpong_images[i].image},
+                .color_attachment_count = 1,
+            });
+    }
 
     RgRenderPassInfo render_pass_info = {
-        .color_attachments = &app->offscreen_image.image,
-        .color_attachment_count = 1,
+        .color_attachments =
+            (RgImage *[]){
+                app->offscreen_image.image,
+                app->pingpong_images[0].image,
+            },
+        .color_attachment_count = 2,
 
-        .depth_stencil_attachment = app->offscreen_depth_image,
+        .depth_stencil_attachment = app->offscreen_depth_image.image,
     };
     app->offscreen_pass = rgRenderPassCreate(device, &render_pass_info);
 }
 
-void AppRenderFrame(App *app)
+void appRenderFrame(App *app)
 {
-    EgCameraUniform camera_uniform = egFPSCameraUpdate(&app->camera, (float)app->delta_time);
+    EgCameraUniform camera_uniform =
+        egFPSCameraUpdate(&app->camera, (float)app->delta_time);
 
     RgSwapchain *swapchain = egEngineGetSwapchain(app->engine);
     RgCmdBuffer *cmd_buffer = app->cmd_buffers[app->current_frame];
@@ -193,10 +256,16 @@ void AppRenderFrame(App *app)
 
     // Offscreen pass
 
-    RgClearValue offscreen_clear_values[2];
-    offscreen_clear_values[0].color = (RgClearColorValue){{0.0, 0.0, 0.0, 1.0}};
-    offscreen_clear_values[1].depth_stencil = (RgClearDepthStencilValue){0.0f, 0};
-    rgCmdSetRenderPass(cmd_buffer, offscreen_pass, 2, offscreen_clear_values);
+    RgClearValue offscreen_clear_values[] = {
+        {.color = {{0.0, 0.0, 0.0, 1.0}}},
+        {.color = {{0.0, 0.0, 0.0, 1.0}}},
+        {.depth_stencil = {0.0f, 0}},
+    };
+    rgCmdSetRenderPass(
+        cmd_buffer,
+        offscreen_pass,
+        EG_CARRAY_LENGTH(offscreen_clear_values),
+        offscreen_clear_values);
 
     rgCmdBindPipeline(cmd_buffer, app->offscreen_pipeline);
     rgCmdBindDescriptorSet(
@@ -206,20 +275,61 @@ void AppRenderFrame(App *app)
 
     {
         float4x4 transform = egFloat4x4Diagonal(1.0f);
-        egFloat4x4Translate(&transform, V3(-2.0, 0.0, -2.0));
+        egFloat4x4Rotate(&transform, (float)egEngineGetTime(app->engine), V3(0, 1, 0));
+        egFloat4x4Translate(&transform, V3(-3.0, 0.0, -3.0));
         egModelAssetRender(app->model_asset, cmd_buffer, &transform);
     }
 
     {
         float4x4 transform = egFloat4x4Diagonal(1.0f);
-        egFloat4x4Translate(&transform, V3(0.0, 0.0, -2.0));
-        egModelAssetRender(app->model_asset, cmd_buffer, &transform);
-    }
-
-    {
-        float4x4 transform = egFloat4x4Diagonal(1.0f);
-        egFloat4x4Translate(&transform, V3(2.0, 0.0, -2.0));
+        egFloat4x4Rotate(&transform, (float)egEngineGetTime(app->engine), V3(0, 1, 0));
+        egFloat4x4Translate(&transform, V3(0.0, 0.0, -3.0));
         egModelAssetRender(app->gltf_asset, cmd_buffer, &transform);
+    }
+
+    {
+        float4x4 transform = egFloat4x4Diagonal(1.0f);
+        egFloat4x4Rotate(&transform, (float)egEngineGetTime(app->engine), V3(0, 1, 0));
+        egFloat4x4Translate(&transform, V3(3.0, 0.0, -3.0));
+        egModelAssetRender(app->model_asset, cmd_buffer, &transform);
+    }
+
+    // Blur pass
+
+    {
+        for (uint32_t i = 0; i < 10; ++i)
+        {
+            struct
+            {
+                uint32_t image_index;
+                uint32_t sampler_index;
+
+                uint32_t horizontal;
+            } pc;
+
+            pc.horizontal = (i + 1) % 2;
+            pc.image_index = app->pingpong_images[i%2].index;
+            pc.sampler_index = app->sampler.index;
+
+            RgRenderPass *blur_renderpass = app->pingpong_renderpasses[(i+1) % 2];
+
+            RgClearValue clear_values[] = {
+                {.color = {{0.0, 0.0, 0.0, 1.0}}},
+            };
+            rgCmdSetRenderPass(
+                cmd_buffer,
+                blur_renderpass,
+                EG_CARRAY_LENGTH(clear_values),
+                clear_values);
+
+            rgCmdBindPipeline(cmd_buffer, app->blur_pipeline);
+            rgCmdBindDescriptorSet(
+                cmd_buffer, 0, egEngineGetGlobalDescriptorSet(app->engine), 0, NULL);
+
+            rgCmdPushConstants(cmd_buffer, 0, sizeof(pc), &pc);
+
+            rgCmdDraw(cmd_buffer, 3, 1, 0, 0);
+        }
     }
 
     // Backbuffer pass
@@ -235,9 +345,12 @@ void AppRenderFrame(App *app)
     struct
     {
         uint32_t offscreen_image_index;
+        uint32_t bloom_image_index;
         uint32_t sampler_index;
     } pc;
     pc.offscreen_image_index = app->offscreen_image.index;
+    pc.bloom_image_index =
+        app->pingpong_images[EG_CARRAY_LENGTH(app->pingpong_images) - 1].index;
     pc.sampler_index = app->sampler.index;
     rgCmdPushConstants(cmd_buffer, 0, sizeof(pc), &pc);
 
@@ -254,7 +367,7 @@ void AppRenderFrame(App *app)
     app->current_frame = (app->current_frame + 1) % 2;
 }
 
-void AppRun(App *app)
+void appRun(App *app)
 {
     while (!egEngineShouldClose(app->engine))
     {
@@ -270,7 +383,7 @@ void AppRun(App *app)
             switch (event.type)
             {
             case EVENT_WINDOW_RESIZED: {
-                AppResize(app);
+                appResize(app);
                 break;
             }
             case EVENT_KEY_PRESSED: {
@@ -286,15 +399,15 @@ void AppRun(App *app)
             }
         }
 
-        AppRenderFrame(app);
+        appRenderFrame(app);
     }
 }
 
 int main()
 {
-    App *app = AppCreate();
-    AppRun(app);
-    AppDestroy(app);
+    App *app = appCreate();
+    appRun(app);
+    appDestroy(app);
 
     return 0;
 }
