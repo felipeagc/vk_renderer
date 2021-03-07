@@ -10,11 +10,6 @@ struct Indices
 
 [[vk::push_constant]] Indices pc;
 
-float4 SRGBtoLINEAR(float4 srgb_in)
-{
-	return float4(pow(srgb_in.xyz, float3(2.2, 2.2, 2.2)), srgb_in.w);
-}
-
 float4 LINEARtoSRGB(float4 linear_in)
 {
 	return float4(pow(linear_in.xyz, float3(1.0/2.2, 1.0/2.2, 1.0/2.2)), linear_in.w);
@@ -36,10 +31,10 @@ float4 pixel(in float2 uv : TEXCOORD0) : SV_Target
 	Texture2D<float4> bloom_image = textures[pc.bloom_image_index];
 	SamplerState offscreen_sampler = samplers[pc.sampler_index];
 
-    float3 col = SRGBtoLINEAR(offscreen_image.Sample(offscreen_sampler, uv)).rgb;
-    col += SRGBtoLINEAR(bloom_image.Sample(offscreen_sampler, uv)).rgb;
+    float3 col = offscreen_image.Sample(offscreen_sampler, uv).rgb;
+    col += bloom_image.Sample(offscreen_sampler, uv).rgb;
 
-	float exposure = 1.8f;
+	float exposure = 5.8f;
 	float3 result = 1.0f - exp(-col * exposure);
 	return LINEARtoSRGB(float4(result, 1.0));
 }

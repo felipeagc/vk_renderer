@@ -23,4 +23,4 @@ cmake --build build
 
 ### Rendering a GLTF model
 
-![image](https://user-images.githubusercontent.com/17355488/110233205-3cff6f00-7f01-11eb-96c7-18dbf7497a88.png)
+![image](https://user-images.githubusercontent.com/17355488/110253221-e24d2e00-7f67-11eb-917a-785fde95acfc.png)

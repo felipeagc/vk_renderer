@@ -28,7 +28,7 @@ float4 pixel(in float2 uv : TEXCOORD0) : SV_Target
 	Texture2D<float4> image = textures[pc.image_index];
 	SamplerState image_sampler = samplers[pc.sampler_index];
 
-	float weight[5] = {0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216};
+	float weight[BLUR_KERNEL_SIZE] = {0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216};
 
 	float width;
 	float height;

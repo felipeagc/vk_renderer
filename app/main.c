@@ -275,21 +275,21 @@ void appRenderFrame(App *app)
 
     {
         float4x4 transform = egFloat4x4Diagonal(1.0f);
-        egFloat4x4Rotate(&transform, (float)egEngineGetTime(app->engine), V3(0, 1, 0));
+        egFloat4x4Rotate(&transform, (float)egEngineGetTime(app->engine) / 100.0f, V3(0, 1, 0));
         egFloat4x4Translate(&transform, V3(-3.0, 0.0, -3.0));
         egModelAssetRender(app->model_asset, cmd_buffer, &transform);
     }
 
     {
         float4x4 transform = egFloat4x4Diagonal(1.0f);
-        egFloat4x4Rotate(&transform, (float)egEngineGetTime(app->engine), V3(0, 1, 0));
+        egFloat4x4Rotate(&transform, (float)egEngineGetTime(app->engine) / 100.0f, V3(0, 1, 0));
         egFloat4x4Translate(&transform, V3(0.0, 0.0, -3.0));
         egModelAssetRender(app->gltf_asset, cmd_buffer, &transform);
     }
 
     {
         float4x4 transform = egFloat4x4Diagonal(1.0f);
-        egFloat4x4Rotate(&transform, (float)egEngineGetTime(app->engine), V3(0, 1, 0));
+        egFloat4x4Rotate(&transform, (float)egEngineGetTime(app->engine) / 100.0f, V3(0, 1, 0));
         egFloat4x4Translate(&transform, V3(3.0, 0.0, -3.0));
         egModelAssetRender(app->model_asset, cmd_buffer, &transform);
     }

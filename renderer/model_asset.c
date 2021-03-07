@@ -45,6 +45,7 @@ typedef struct MaterialUniform
     uint32_t metallic_roughness_image_index;
     uint32_t occlusion_image_index;
     uint32_t emissive_image_index;
+    uint32_t brdf_image_index;
 } MaterialUniform;
 
 typedef enum ModelType {
@@ -569,7 +570,7 @@ egModelAssetFromGltf(EgModelManager *manager, const uint8_t *data, size_t size)
                 .vertex_count = (uint32_t)vertex_count,
                 .material_index = -1,
                 .has_indices = has_indices,
-                .is_normal_mapped = normal_buffer != NULL && tangent_buffer != NULL,
+                .is_normal_mapped = ((normal_buffer != NULL) && (tangent_buffer != NULL)),
             };
 
             if (gltf_primitive->material)
@@ -809,6 +810,8 @@ NodeRender(EgModelAsset *model, Node *node, RgCmdBuffer *cmd_buffer, float4x4 *t
     (void)node;
     (void)cmd_buffer;
 
+    EgEngine *engine = model->manager->engine;
+
     ModelUniform model_uniform = {};
     model_uniform.transform = egFloat4x4Mul(&node->resolved_matrix, transform);
 
@@ -839,6 +842,7 @@ NodeRender(EgModelAsset *model, Node *node, RgCmdBuffer *cmd_buffer, float4x4 *t
                 material->metallic_roughness_image.index;
             material_uniform.occlusion_image_index = material->occlusion_image.index;
             material_uniform.emissive_image_index = material->emissive_image.index;
+            material_uniform.brdf_image_index = egEngineGetBRDFImage(engine).index;
 
             uint32_t material_index = egBufferPoolAllocateItem(
                 model->manager->material_buffer_pool,
