@@ -21,6 +21,6 @@ cmake --build build
 
 ## Current screenshots
 
-### Rendering a sphere mesh
+### Rendering a GLTF model
 
-![image](https://user-images.githubusercontent.com/17355488/107703911-2287fc00-6c9b-11eb-9cb9-c8a1914eecb6.png)
+![image](https://user-images.githubusercontent.com/17355488/110233205-3cff6f00-7f01-11eb-96c7-18dbf7497a88.png)
